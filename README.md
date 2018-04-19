@@ -47,7 +47,7 @@ compiler-specific `.mod` files.)
 ![Not the repo you want][obi-wan]
 </div>
 
-
+[TAU]: https://www.cs.uoregon.edu/research/tau/home.php
 [PDT]: https://www.cs.uoregon.edu/research/pdt/home.php
 [UO CS dept.]: https://cs.uoregon.edu/
 [University of Oregon]: https://www.uoregon.edu/
