@@ -11,8 +11,16 @@ PDB=pdtfilenotspecified
 if [ "x$TMPDIR" = "x" ]; then
   TMP="/tmp"
 else
-  TMP=${TMPDIR}
+  TMP="${TMPDIR}"
 fi
+
+if [ "x$PDT_MOD_DIR" = "x" ]; then
+  GFPARSE_MOD_DIR="${TMP}/PDT-GFPARSE/pdt-${USER}"
+else
+  GFPARSE_MOD_DIR="${PDT_MOD_DIR}"
+fi
+
+mkdir -p "${GFPARSE_MOD_DIR}"
 
 # place it at the start of the path so that cc1/gfortran/f951 from PDT are used
 GFORTRAN="PATH=${BINDIR}/pdt_gfortran:$PATH gfortran"
@@ -119,7 +127,7 @@ if [ ${PDB} = ".pdb" ] ; then
 fi
 
 
-GF_ARGS="-c -o /dev/null -fdump-parse-tree"
+GF_ARGS="-c -o /dev/null -fdump-parse-tree -ffree-line-length-none -J${GFPARSE_MOD_DIR} -I${GFPARSE_MOD_DIR}"
 #
 # run the gfortran parser
 #
