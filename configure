@@ -1,0 +1,1462 @@
+#!/bin/sh
+#/*************************************************************************/
+#/* Program Database Toolkit (PDT)                                        */
+#/* Copyright (C) 1998-2018                                               */
+#/* University of Oregon, Department of Computer and Information Science  */
+#/* Forschungszentrum Juelich, Zentralinstitut fuer Angewandte Mathematik */
+#/* Los Alamos National Laboratory, Advanced Computing Laboratory         */
+#/*************************************************************************/
+
+
+unset CC
+unset CXX
+/bin/rm -f .last_config
+echo $* > .last_config
+echo $* >> .all_configs
+
+# first set up these symbolic links, since we can't put them in CVS
+/bin/rm -f sgi32/bin/gfortran sgi64/bin/gfortran
+if [ -f sgin32 ]; then 
+  ln -s ../../sgin32/bin/gfortran sgi32/bin/gfortran
+  ln -s ../../sgin32/bin/gfortran sgi64/bin/gfortran
+fi
+
+
+echo "Program Database Toolkit (PDT) Configuration"
+echo "--------------------------------------------"
+
+#-- Set up defaults
+#------------------
+arch_given=no
+gnu_given=no
+apple=no
+targetprefix_given=no
+tar_cmd=tar
+prefix_given=no
+execprefix_given=no
+enable_old_headers=no
+PDTDIR=`pwd`
+PDTCURWD=`pwd`
+COMPDIR=
+
+#-- Default compilers
+#--------------------
+cxx_compiler=default
+useropt=default
+
+#-- Set up portable echo command
+#-------------------------------
+case "`echo 'x\c'`" in
+'x\c')  echo="echo -n"  nnl= ;;     #BSD
+x)      echo="echo"     nnl="\c";;  #SysV
+*)      echo "Cannot setup echo. What weird machine do you have?"
+        exit 1;;
+esac
+
+#-- Determine system architecture
+#--------------------------------
+case `uname -s` in
+SunOS)
+  if [ `uname -m` = i86pc ] ; then
+      ARCH=SUN386I
+      PLATFORM=sun386i
+      echo "Looks like an x86 Solaris machine ..."
+  else
+      ARCH=SOL2
+      PLATFORM=solaris2
+      echo "Looks like a SUN Solaris machine ..."
+  fi
+  ;;
+FreeBSD)
+  if [ `uname -m` = i386 ] ; then
+    PLATFORM=freebsd
+    ARCH=linux
+    if [ ! -d $PLATFORM ] 
+    then 
+      mkdir -p $PLATFORM
+      /bin/cp -r linux/bin $PLATFORM
+    fi 
+  fi
+  ;;
+IRIX)
+  ARCH=IRIXN32
+  PLATFORM=sgin32
+  echo "Looks like an SGI IRIXN32 machine ..."
+  ;;
+IRIX64)
+  ARCH=IRIX64
+  PLATFORM=sgi64
+  echo "Looks like an SGI IRIX64 machine ..."
+  ;;
+Linux)
+  ARCH=LINUX
+  PLATFORM=linux
+  if [ `uname -m` = x86_64 ]
+  then
+    if [ -r /opt/mta-pe ]
+    then
+      ARCH=CRAYXMT
+      PLATFORM=crayxmt
+      echo "Looks like a Cray XMT machine..."
+    else
+      ARCH=X86_64
+      PLATFORM=x86_64
+      echo "Looks like an x86_64 machine..."
+    fi
+  else
+    if [ `uname -m` = ppc64 ]; then
+      PLATFORM=ppc64
+      ARCH=PPCLINUX
+    else 
+      if [ `uname -m` = ia64 ]
+      then
+        PLATFORM=ia64
+	ARCH=LINUX
+      else 
+        if [ `uname -m` = mips64 ]
+        then
+          PLATFORM=mips
+	  ARCH=MIPS64LINUX
+        else 
+          if [ `uname -m` = ppc64le ]
+          then
+            PLATFORM=ibm64linux
+	    ARCH=IBM64LINUX
+          else
+            if [ `uname -m` = aarch64 ]
+            then
+              PLATFORM=arm64_linux
+	      ARCH=ARM64LINUX
+            else 
+# check for ARM linux so it covers uname -m output such as armv7l or arm*
+	      uname_output=`uname -m`
+	      match_string="arm"
+	      test_arg=${uname_output#$match_string}
+              if [ "y$test_arg" != "y$uname_output" ]
+              then
+                PLATFORM=arm_linux
+	        ARCH=ARM32LINUX
+              fi
+            fi
+          fi
+        fi
+      fi
+    fi
+    echo "Looks like a Linux machine ..."
+  fi
+  ;;
+sn*)
+  ARCH=CRAY
+  PLATFORM=t3e
+  echo "Looks like a Cray T3E machine ..."
+  ;;
+HP-UX)
+  ARCH=HPUX
+  PLATFORM=hp9000s700
+  echo "Looks like an HP-UX machine ..."
+  ;;
+AIX)
+  ARCH=AIX
+  PLATFORM=rs6000
+  echo "Looks like an IBM RS/6000 AIX machine ..."
+  ;;
+OSF1)
+  ARCH=OSF1
+  PLATFORM=alpha
+  echo "Looks like a Compaq Alpha OSF1 machine ..."
+  ;;
+Darwin)
+  PLATFORM=apple
+  if [ "x`uname -m`" = "xx86_64" ]; then
+    ARCH=INTELMACOSX
+    echo "Looks like an Intel Mac OS X machine ..."
+  else 
+    ARCH=DARWIN
+    echo "Looks like an Apple Darwin ppc machine ..."
+  fi
+  ;;
+HI-UX/MPP)
+  ARCH=HITACHI
+  PLATFORM=hitachi
+  echo "Looks like a Hitachi SR8000 machine ..."
+  ;;
+UNICOS/mp)
+  ARCH=CRAYX1
+  PLATFORM=crayx1
+  echo "Looks like a Cray X1 machine ..."
+  ;;
+*)
+  echo "`uname -s` is not yet supported"
+  exit
+  ;;
+esac
+
+
+#-- Examine system for C++ compilers
+#-----------------------------------
+$echo "Looking for C++ compilers ${nnl}"
+plist=`echo $PATH | sed -e 's/:/ /g'`
+for dir in $plist
+do
+  if [ -x $dir/CC -a -z "$path_CC" ]
+  then
+    $echo ".${nnl}"
+    #echo "    Using $dir/CC"
+    path_CC=$dir/CC
+  fi
+  if [ -x $dir/xlC -a -z "$path_xlC" ]
+  then
+    $echo ".${nnl}"
+    #echo "    Using $dir/xlC"
+    path_xlC=$dir/xlC
+  fi
+  if [ -x $dir/g++ -a -z "$path_gxx" ]
+  then
+    $echo ".${nnl}"
+    #echo "    Using $dir/g++"
+    path_gxx=$dir/g++
+  fi
+  if [ -x $dir/g++4 -a -z "$path_gxx4" ]
+  then
+    $echo ".${nnl}"
+    #echo "    Using $dir/g++"
+    path_gxx4=$dir/g++4
+  fi
+  if [ -x $dir/eg++ -a -z "$path_egxx" ]
+    then
+      $echo ".${nnl}"
+      #echo "    Using $dir/eg++"
+      path_egxx=$dir/eg++
+    elif [ -x $dir/egcs -a -z "$path_egxx" ]
+    then
+      $echo ".${nnl}"
+      #echo "    Using $dir/egcs"
+      path_egxx=$dir/egcs
+  fi
+  if [ -x $dir/clang++ -a -z "$path_clangXX" ]
+  then
+    $echo ".${nnl}"
+    #echo "    Using $dir/clang"
+    path_clangXX=$dir/clang++
+  fi
+  if [ -x $dir/c++ -a -z "$path_cpp" ]
+  then
+    $echo ".${nnl}"
+    #echo "    Using $dir/c++"
+    path_cpp=$dir/c++
+  fi
+  if [ -x $dir/pgc++ -a -z "$path_pgCC" ]
+  then
+    $echo ".${nnl}"
+    #echo "    Using $dir/pgCC"
+    path_pgCC=$dir/pgc++
+  fi
+  if [ -x $dir/pgCC -a -z "$path_pgCC" ]
+  then
+    $echo ".${nnl}"
+    #echo "    Using $dir/pgCC"
+    path_pgCC=$dir/pgCC
+  fi
+  if [ -x $dir/pgcpp -a -z "$path_pgCC" ]
+  then
+    $echo ".${nnl}"
+    #echo "    Using $dir/pgcpp"
+    path_pgCC=$dir/pgcpp
+    apple=yes
+  fi
+  if [ -x $dir/cxx -a -z "$path_cxx" ]
+  then
+    $echo ".${nnl}"
+    #echo "    Using $dir/cxx"
+    path_cxx=$dir/cxx
+  fi
+  if [ -x $dir/icpc -a -z "$path_icpc" ]
+  then
+    $echo ".${nnl}"
+    #echo "    Using $dir/icpc"
+    path_icpc=$dir/icpc
+  fi
+  if [ -x $dir/ecpc -a -z "$path_ecpc" ]
+  then
+    $echo ".${nnl}"
+    #echo "    Using $dir/ecpc"
+    path_ecpc=$dir/ecpc
+  fi
+  if [ -x $dir/pathCC -a -z "$path_pathcc" ]
+  then
+    $echo ".${nnl}"
+    #echo "    Using $dir/pathCC"
+    path_pathcc=$dir/pathCC
+  fi
+  if [ -x $dir/orCC -a -z "$path_orcc" ]
+  then
+    $echo ".${nnl}"
+    #echo "    Using $dir/orCC"
+    path_orcc=$dir/orCC
+  fi
+  if [ -x $dir/scg++ -a -z "$path_scgcc" ]
+  then
+    $echo ".${nnl}"
+    #echo "    Using $dir/scg++"
+    path_scgcc=$dir/scg++
+  fi
+  if [ -x $dir/g++-5 -a -x $dir/gcc-5 -a $PLATFORM=apple ]
+  then
+    $echo ".${nnl}"
+    #echo "    Using $dir/g++-5"
+    path_gxx=$dir/g++-5
+    # rose_header_gen uses $CC
+    export CXX=$dir/g++-5
+    export CC=$dir/gcc-5
+  fi
+  if [ -x $dir/g++-6 -a -x $dir/gcc-6 -a $PLATFORM=apple ]
+  then
+    $echo ".${nnl}"
+    #echo "    Using $dir/g++-6"
+    path_gxx=$dir/g++-6
+    # rose_header_gen uses $CC
+    export CXX=$dir/g++-6
+    export CC=$dir/gcc-6
+  fi
+  if [ -x $dir/g++-7 -a -x $dir/gcc-7 -a $PLATFORM=apple ]
+  then
+    $echo ".${nnl}"
+    #echo "    Using $dir/g++-7"
+    path_gxx=$dir/g++-7
+    # rose_header_gen uses $CC
+    export CXX=$dir/g++-7
+    export CC=$dir/gcc-7
+  fi
+  if [ -x $dir/g++-8 -a -x $dir/gcc-8 -a $PLATFORM=apple ]
+  then
+    $echo ".${nnl}"
+    #echo "    Using $dir/g++-8"
+    path_gxx=$dir/g++-8
+    # rose_header_gen uses $CC
+    export CXX=$dir/g++-8
+    export CC=$dir/gcc-8
+  fi
+  if [ -x $dir/g++-9 -a -x $dir/gcc-9 -a $PLATFORM=apple ]
+  then
+    $echo ".${nnl}"
+    #echo "    Using $dir/g++-9"
+    path_gxx=$dir/g++-9
+    # rose_header_gen uses $CC
+    export CXX=$dir/g++-9
+    export CC=$dir/gcc-9
+  fi
+    
+done
+echo " done"
+
+#-- Process arguments
+#--------------------
+for arg in "$@";
+do
+  case $arg in
+
+  -egcs|-EGCS|--egcs|--EGCS)
+    gnu_given=yes
+    cxx_compiler=EGXX
+    if [ -z "$path_egxx" ]
+    then
+      echo "ERROR: eg++ not found"
+      exit
+    else
+      echo "==> Using $path_egxx"
+      path_cxx=$path_egxx
+      #cxx_opt=gnu
+    fi
+    shift
+    ;;
+
+  -gnu|-GNU|--gnu|--GNU)
+    gnu_given=yes
+    cxx_compiler=GXX
+    if [ -z "$path_gxx" ]
+    then
+      echo "ERROR: g++ not found"
+      exit
+    else
+      echo "==> Using $path_gxx"
+      path_cxx=$path_gxx
+      #cxx_opt=gnu
+    fi
+    shift
+    ;;
+
+  -gnu4|-GNU4|--gnu4|--GNU4)
+    gnu_given=yes
+    cxx_compiler=GXX4
+    if [ -z "$path_gxx4" ]
+    then
+      echo "ERROR: g++ not found"
+      exit
+    else
+      echo "==> Using $path_gxx4"
+      path_cxx=$path_gxx4
+      #cxx_opt=gnu
+    fi
+    shift
+    ;;
+
+  -clang|-CLANG|--clang|--CLANG|--clang++|--llvm|--LLVM|-llvm|-clang++)
+    gnu_given=yes
+    cxx_compiler=CLANG
+    if [ -z "$path_clangXX" ]
+    then
+      echo "ERROR: clang++ not found"
+      exit
+    else
+      echo "==> Using $path_clangXX"
+      path_cxx=$path_clangXX
+    fi
+    shift
+    ;;
+
+  -kai|-kcc|-KAI|-KCC|--kai|--kcc|--KAI|--KCC)
+    cxx_compiler=KCC
+    if [ -z "$path_KCC" ]
+    then
+      echo "ERROR: KCC not found"
+      exit
+    else
+      echo "==> Using $path_KCC"
+      path_cxx=$path_KCC
+      #cxx_opt=kcc
+    fi
+    shift
+    ;;
+
+  -CC|--CC)
+    cxx_compiler=CC
+    if [ $ARCH = "SOL2" -o $ARCH = "SUNX86_64" -o $ARCH = "SUN386I" -o $ARCH = "SOLARIS2-64" ]
+    then
+      cxx_compiler=SOLCC
+      echo "Currently, we only support SUN CC v6.2 or better..."
+    fi
+    if [ $ARCH = "CRAY" -o $ARCH = "CRAYX1" ]
+    then
+      cxx_compiler=CRAYCC
+    fi
+    if [ -z "$path_CC" ]
+    then
+      echo "ERROR: CC not found"
+      exit
+    else
+      echo "==> Using $path_CC"
+      path_cxx=$path_CC
+      #cxx_opt=cc
+    fi
+    shift
+    ;;
+
+  -c++|--c++|-CPP|--CPP|-C++|--C++)
+    cxx_compiler=CPP
+    if [ -z "$path_cpp" ]
+    then
+      echo "ERROR: c++ not found"
+      exit
+    else
+      echo "==> Using $path_cpp"
+      path_cxx=$path_cpp
+      #cxx_opt=cc
+    fi
+    shift
+    ;;
+
+  -cxx|--cxx|-CXX|--CXX)
+    cxx_compiler=CXX
+    if [ -z "$path_cxx" ]
+    then
+      echo "ERROR: cxx not found"
+      exit
+    else
+      echo "==> Using $path_cxx"
+      path_cxx=$path_cxx
+      #cxx_opt=cc
+    fi
+    shift
+    ;;
+
+  -xlC|--xlC|-xlc|--xlc|-XLC|--XLC|-IBM|--IBM)
+    cxx_compiler=XLC
+    if [ -z "$path_xlC" ]
+    then
+      echo "ERROR: xlC not found"
+      exit
+    else
+      echo "==> Using $path_xlC"
+      path_cxx=$path_xlC
+      #cxx_opt=cc
+    fi
+    shift
+    ;;
+
+  -pgCC|--pgCC|-pgcc|--pgcc|-PGI|--PGI)
+    echo "Currently, we only support PGI C++ compiler v6.0 or better"
+    cxx_compiler=PGI
+    if [ -z "$path_pgCC" ]
+    then
+      echo "ERROR: pgCC not found"
+      exit
+    else
+      echo "==> Using $path_pgCC"
+      path_cxx=$path_pgCC
+      #cxx_opt=cc
+    fi
+    cxx_compiler=PGI6
+    if [ $apple = yes ] 
+    then
+      cxx_compiler=APPLEPGI
+    fi
+    shift
+    ;;
+
+  -icpc|--icpc|-ICPC|--ICPC|-INTEL32|--INTEL32)
+    cxx_compiler=ICPC
+    if [ -z "$path_icpc" ]
+    then
+      echo "ERROR: icpc not found"
+      exit
+    else
+      echo "==> Using $path_icpc"
+      path_cxx=$path_icpc
+      #cxx_opt=cc
+    fi
+    shift
+    ;;
+
+  -ecpc|--ecpc|-ECPC|--ECPC|-INTEL64|--INTEL64)
+    cxx_compiler=ECPC
+    if [ -z "$path_ecpc" ]
+    then
+      echo "ERROR: ecpc not found"
+      exit
+    else
+      echo "==> Using $path_ecpc"
+      path_cxx=$path_ecpc
+      #cxx_opt=cc
+    fi
+    shift
+    ;;
+
+  -scgcc|--scgcc|-SICORTEXGCC|--SICORTEXGCC|-SCGCC|--SCGCC|-SICORTEX|--SICORTEX)
+    cxx_compiler=SCGCC
+    if [ -z "$path_scgcc" ]
+    then
+      echo "ERROR: scgcc not found"
+      exit
+    else
+      echo "==> Using $path_scgcc"
+      path_cxx=$path_scgcc
+      if [ "x$PLATFORM" != "xmips32" ]
+      then
+# implicitly define arch
+        ARCH=MIPS64LINUX
+        PLATFORM=mips
+      fi
+      #cxx_opt=cc
+    fi
+    shift
+    ;;
+
+  -MIPSCROSS|--MIPSCROSS)
+    cxx_compiler=GXX
+    if [ -z "$path_gxx" ]
+    then
+      echo "ERROR: g++ not found"
+      exit
+    else
+      echo "==> Using $path_gxx"
+      path_cxx=$path_gxx
+      ARCH=MIPSCROSS
+      PLATFORM=x86_64
+    fi
+    shift
+    ;;
+
+  -pathcc|--pathcc|-PATHCC|--PATHCC|-PATHSCALE|--PATHSCALE|-pathscale|--pathscale)
+    cxx_compiler=PATHCC
+    if [ -z "$path_pathcc" ]
+    then
+      echo "ERROR: pathCC not found"
+      exit
+    else
+      echo "==> Using $path_pathcc"
+      path_cxx=$path_pathcc
+      #cxx_opt=cc
+    fi
+    shift
+    ;;
+
+  -orcc|--orcc|-ORCC|--ORCC|-OPEN64|--OPEN64|-open64|--open64)
+    cxx_compiler=ORCC
+    if [ -z "$path_orcc" ]
+    then
+      echo "ERROR: orCC not found"
+      exit
+    else
+      echo "==> Using $path_orcc"
+      path_orcc=$path_orcc
+      #cxx_opt=cc
+    fi
+    shift
+    ;;
+
+  -prefix=*)
+    prefix_given=yes
+    umask 2;
+    prefixdir=`echo $arg | sed -e 's/-prefix=//'`
+    shift
+    ;;
+
+  -targetprefix=*)
+    targetprefix_given=yes
+    targetprefixdir=`echo $arg | sed -e 's/-targetprefix=//'`
+    shift
+    ;;
+
+  -exec-prefix=*)
+    execprefix_given=yes
+    execprefixdir=`echo $arg | sed -e 's/-exec-prefix=//'`
+    shift
+    ;;
+
+  -arch=*)
+    arch_given=yes
+    ARCH=`echo $arg | sed -e 's/-arch=//' -e 's/ /_/g'`
+    case $ARCH in 
+      CRAYXMT|crayxmt)
+	PLATFORM=crayxmt
+	ARCH=CRAYXMT
+        ;;
+      IRIXO32)
+	PLATFORM=sgi32
+        ;;
+      IRIXN32)
+        PLATFORM=sgin32
+        ;;
+      IRIX64)
+	PLATFORM=sgi64
+	;;
+      solaris2-64)
+	ARCH=SOLARIS2-64
+        PLATFORM=solaris2-64
+	if [ ! -h $PLATFORM ] 
+	then 
+	  mkdir -p $PLATFORM
+	  /bin/cp -r solaris2/bin $PLATFORM
+	fi 
+	;;
+      sunx86_64)
+	ARCH=SUNX86_64
+	PLATFORM=sunx86_64
+	if [ ! -h $PLATFORM ] 
+	then 
+	  mkdir -p $PLATFORM
+	  /bin/cp -r sun386i/bin $PLATFORM
+	fi 
+	;;
+      ibm64)
+	ARCH=IBM64
+	PLATFORM=ibm64
+	tar_cmd=gtar
+	if [ `uname -s` = "Linux" ] 
+        then
+	  echo "ERROR: Please use -arch=ibm64linux for this platform"
+	  exit 1
+        fi
+	if [ ! -h $PLATFORM ] 
+	then 
+	  mkdir -p $PLATFORM
+	  /bin/cp -r rs6000/bin $PLATFORM
+	fi 
+# We're using the same binaries
+	;;
+      ibm64linux)
+	ARCH=IBM64LINUX
+	PLATFORM=ibm64linux
+	if [ ! -h $PLATFORM ] 
+	then 
+	  mkdir -p $PLATFORM
+	 # /bin/cp -r ppc64/bin $PLATFORM
+	fi 
+# Check if powerpc64-linux-g++ is in the path
+# g++ can generate 64 bit code using -m64. We don't need /opt/cross/
+# bin/g++ anymore
+#        if [ -z "$path_ppc64gxx" ]
+#        then
+#          echo "Error: powerpc64-linux-g++ is not in the path."
+#          echo "You'll need to add /opt/cross/bin to your path."
+#          exit
+#        fi
+# We're using the same binaries
+	;;
+      mips)
+        ARCH=MIPS64LINUX
+        PLATFORM=mips
+        ;;
+      mips32)
+        ARCH=MIPS32LINUX
+        PLATFORM=mips32
+	if [ ! -h $PLATFORM ] 
+	then 
+	  mkdir -p $PLATFORM
+	  /bin/cp -r mips/bin $PLATFORM
+	fi 
+        ;;
+      i386_linux)
+	ARCH=IA32LINUX
+	PLATFORM=linux
+	;;
+      arm64_linux|aarch64)
+        ARCH=ARM64LINUX
+        PLATFORM=arm64_linux
+        ;;
+      arm_linux)
+        ARCH=ARM64LINUX
+        PLATFORM=arm64_linux
+        ;;
+      *)
+        echo "ERROR: -arch=crayxmt|IRIXO32|IRIXN32|IRIX64|solaris2-64|sunx86_64|ibm64|ibm64linux|ia64|i386_linux|mips|mips32|arm_linux|arm64_linux|aarch64"
+	exit
+	;;
+    esac
+    shift
+    ;;
+
+  -compdir=*)
+    COMPDIR=`echo $arg | sed -e 's/-compdir=//'`
+    shift
+    ;;
+
+  -enable-old-headers|--enable-old-headers)
+    enable_old_headers=yes
+    shift
+    ;;
+
+  -useropt=*)
+    useropt=`echo $arg | sed -e 's/-useropt=//' -e 's/ /#/g'`
+    shift
+    ;;
+
+  --useropt=*)
+    useropt=`echo $arg | sed -e 's/--useropt=//' -e 's/ /#/g'`
+    shift
+    ;;
+
+  default)
+    PLATFORM=
+    for i in `find . -name Makefile -print`
+    do
+      echo "Fixing $i..."
+      if sed -e "s@\(.*\)#EOC#\(.*\)@\2\1#EOC#@" \
+             -e "s@^PDTDIR=.*\$@PDTDIR=@" \
+             -e "s@^COMPDIR=.*\$@COMPDIR=@" \
+             -e "s@^PDT_GXX=.*\$@PDT_GXX=g++ @" \
+             -e "s@^PLATFORM=.*\$@PLATFORM=$PLATFORM@" $i > /tmp/config.$$ 
+      then
+        mv /tmp/config.$$ $i
+      else
+        echo "ERROR: cannot configure Makefiles"
+        exit
+      fi
+      done
+      exit 
+      ;;
+
+  -help|--help)
+    if [ $arg != "-help" -a $arg != "--help" ]
+    then
+      echo "ERROR: unknown option $arg"
+    fi
+    echo "Usage: ./configure [-KAI|-KCC|-GNU|-CC|-c++|-cxx|-xlC|-pgCC|-icpc|-ecpc]"
+    echo "                   [-arch=ibm64|ibm64linux|solaris2-64|sunx86_64|IRIXO32|"
+    echo "                    IRIXN32|IRIX64|ia64|i386_linux|crayxmt|arm64_linux|ibm64linux]"
+    echo "                   [-help]"
+    echo "                   [-compdir=<compdir>]"
+    echo "                   [-enable-old-headers]"
+    echo "                   [-useropt=<options>]"
+    echo "                   [-prefix=<dir>]"
+    echo "                   [-exec-prefix=<dir>]"
+    exit
+    ;;
+  esac
+done
+
+#-- Unpack the binaries for the platform
+$PDTCURWD/pdtpack -u -platform=$PLATFORM
+
+# Fix for xmmintrin.h
+touch include/kai/fix/xmmintrin.h
+
+
+if [ $PLATFORM = crayxmt ]
+then
+  osdir=`which c++ | sed -e 's@c++@..@'`
+  if [ -d $osdir ] 
+  then 
+    echo "NOTE: Copying system headers to the PDT directory"
+    /bin/rm -rf include/kai/fix/xmtheaders
+    mkdir -p include/kai/fix/xmtheaders
+    for i in mpool.h mta_rng.h sys luc machine
+    do
+        cp -r $osdir/include/$i include/kai/fix/xmtheaders
+    done 
+  fi
+fi
+
+if [ $PLATFORM = freebsd -a $ARCH = linux ]
+then
+    cd $PLATFORM/bin
+    brandelf -t Linux edgcpfe taucpdisp f90fe pdtf90disp pdtflint gfortran/cc1 gfortran/gfortran gfortran/f951
+    cd ../..
+fi
+
+#-- For GNU compilers, if no architecture is given, use defaults
+#---------------------------------------------------------------
+case `uname -s` in
+IRIX|IRIX64)
+  if [ $gnu_given = yes -a $arch_given = yes -a $ARCH != IRIXN32 ]
+  then
+    echo "ERROR: For GNU compiler, -arch=IRIXN32"
+    exit
+  fi
+  if [ $gnu_given = yes -a $arch_given = no ]
+  then
+    ARCH=IRIXN32
+    PLATFORM=sgin32
+    echo "==> Setting default GNU platform to $PLATFORM"
+  fi
+  ;;
+esac
+if [ $prefix_given = yes ]
+then
+  echo "==> PREFIX is $prefixdir"
+  if [ ! -d $prefixdir ]
+  then
+    mkdir -p $prefixdir
+  fi
+  cp -r include $prefixdir
+  cp updatepdt $prefixdir
+  cp -r $PLATFORM $prefixdir
+  cp README LICENSE $prefixdir
+  cp -r etc $prefixdir
+  cp .all_configs .last_config $prefixdir
+  PDTDIR=$prefixdir
+fi
+
+if [ $execprefix_given = yes ]
+then
+  echo "==> EXEC PREFIX is $execprefixdir"
+  if [ $prefix_given = yes ] 
+  then 
+    if [ ! -h $prefixdir/$execprefixdir ]
+    then 
+      ln -s $prefixdir/$PLATFORM $prefixdir/$execprefixdir
+    fi
+  else
+    if [ ! -h $execprefixdir ]
+    then
+      ln -s $PLATFORM $execprefixdir
+    fi
+  fi
+fi
+
+echo "==> ARCH is $ARCH"
+echo "==> PLATFORM is $PLATFORM"
+
+#-- Set up directory structure
+#-----------------------------
+if [ ! -d ductape/bin ]
+then
+  mkdir ductape/bin
+fi
+if [ ! -d $PLATFORM ]
+then
+  echo "ERROR: $PLATFORM directory missing"
+  exit
+fi
+if [ ! -d $PLATFORM/bin ]
+then
+  echo "ERROR: $PLATFORM/bin directory missing"
+  exit
+fi
+if [ ! -d $PDTDIR/$PLATFORM/$COMPDIR ]
+then
+  mkdir $PDTDIR/$PLATFORM/$COMPDIR
+fi
+cp $PDTCURWD/ductape/inc/*.h $PDTCURWD/ductape/inc/*.inl $PDTDIR/include
+chmod 644 $PDTDIR/include/*.h $PDTDIR/include/*.inl
+if [ ! -h $PDTDIR/$PLATFORM/$COMPDIR/include ]
+then
+  /bin/rm -rf $PDTDIR/$PLATFORM/$COMPDIR/include 
+  ln -s $PDTDIR/include $PDTDIR/$PLATFORM/$COMPDIR
+fi
+if [ ! -d $PDTDIR/$PLATFORM/$COMPDIR/bin ]
+then
+  mkdir -p $PDTDIR/$PLATFORM/$COMPDIR/bin
+fi
+if [ ! -d $PDTDIR/$PLATFORM/$COMPDIR/lib ]
+then
+  mkdir $PDTDIR/$PLATFORM/$COMPDIR/lib
+fi
+if [ $PLATFORM = linux -a ! -h $PDTDIR/i386_linux ]
+then
+  ln -s $PDTDIR/linux $PDTDIR/i386_linux
+fi
+if [ $PLATFORM = IRIXN32 -a ! -h $PDTDIR/sgi8k ]
+then
+  ln -s $PDTDIR/sgin32 $PDTDIR/sgi8k
+fi
+if [ $PLATFORM = hp9000s700 -a ! -h $PDTDIR/hp9000s800 ]
+then
+  ln -s $PDTDIR/hp9000s700 $PDTDIR/hp9000s800
+fi
+if [ $PLATFORM = x86_64 ]
+then
+  if [ ! -L $PDTDIR/craycnl ] 
+  then 
+    ln -s $PDTDIR/x86_64 $PDTDIR/craycnl
+  fi 
+  if [ ! -L $PDTDIR/sparc64fx ] 
+  then 
+    ln -s $PDTDIR/x86_64 $PDTDIR/sparc64fx
+  fi 
+  if [ ! -L $PDTDIR/mic_linux ] 
+  then 
+    ln -s $PDTDIR/x86_64 $PDTDIR/mic_linux
+  fi 
+  if [ ! -L $PDTDIR/xt3 ] 
+  then 
+    ln -s $PDTDIR/x86_64 $PDTDIR/xt3
+  fi 
+fi
+if [ $PLATFORM = ppc64 ]
+then
+  if [ ! -L $PDTDIR/bgp ] 
+  then 
+    ln -s $PDTDIR/ppc64 $PDTDIR/bgp
+  fi
+  if [ ! -L $PDTDIR/bgl ] 
+  then 
+    ln -s $PDTDIR/ppc64 $PDTDIR/bgl
+  fi
+  if [ ! -L $PDTDIR/bgq ] 
+  then 
+    ln -s $PDTDIR/ppc64 $PDTDIR/bgq
+  fi
+fi
+
+if [ "x$COMPDIR" != "x" ]
+then
+  /bin/rm -f $PDTDIR/$PLATFORM/$COMPDIR/bin/edgcpfe
+  /bin/rm -f $PDTDIR/$PLATFORM/$COMPDIR/bin/taucpdisp
+  /bin/rm -f $PDTDIR/$PLATFORM/$COMPDIR/bin/edgcpfe4101
+  /bin/rm -f $PDTDIR/$PLATFORM/$COMPDIR/bin/taucpdisp4101
+  /bin/rm -f $PDTDIR/$PLATFORM/$COMPDIR/bin/f90fe
+  /bin/rm -f $PDTDIR/$PLATFORM/$COMPDIR/bin/pdtf90disp
+  /bin/rm -f $PDTDIR/$PLATFORM/$COMPDIR/bin/gfortran
+  /bin/rm -f $PDTDIR/$PLATFORM/$COMPDIR/bin/gfortran
+  /bin/rm -rf $PDTDIR/$PLATFORM/$COMPDIR/bin/pdt_gfortran
+  /bin/rm -rf $PDTDIR/$PLATFORM/$COMPDIR/bin/pdt_gfortran48
+  ln -s $PDTDIR/$PLATFORM/bin/edgcpfe   $PDTDIR/$PLATFORM/$COMPDIR/bin
+  ln -s $PDTDIR/$PLATFORM/bin/taucpdisp $PDTDIR/$PLATFORM/$COMPDIR/bin
+  ln -s $PDTDIR/$PLATFORM/bin/edgcpfe4101   $PDTDIR/$PLATFORM/$COMPDIR/bin
+  ln -s $PDTDIR/$PLATFORM/bin/taucpdisp4101 $PDTDIR/$PLATFORM/$COMPDIR/bin
+  ln -s $PDTDIR/$PLATFORM/bin/f90fe 	$PDTDIR/$PLATFORM/$COMPDIR/bin
+  ln -s $PDTDIR/$PLATFORM/bin/pdtf90disp $PDTDIR/$PLATFORM/$COMPDIR/bin
+  ln -s $PDTDIR/$PLATFORM/bin/pdt_gfortran $PDTDIR/$PLATFORM/$COMPDIR/bin
+  ln -s $PDTDIR/$PLATFORM/bin/pdt_gfortran48 $PDTDIR/$PLATFORM/$COMPDIR/bin
+  if [ -f $PDTDIR/$PLATFORM/bin/pdtflint ]
+  then
+    /bin/rm -f $PDTDIR/$PLATFORM/$COMPDIR/bin/pdtflint
+    ln -s $PDTDIR/$PLATFORM/bin/pdtflint $PDTDIR/$PLATFORM/$COMPDIR/bin
+  fi
+  if [ -f $PDTDIR/$PLATFORM/bin/gfparse485 ]
+  then
+    /bin/rm -f $PDTDIR/$PLATFORM/$COMPDIR/bin/gfparse485
+    ln -s $PDTDIR/$PLATFORM/bin/gfparse485 $PDTDIR/$PLATFORM/$COMPDIR/bin
+  fi
+fi
+
+#-- If no compiler specified; use "best" one available
+#-----------------------------------------------------
+if [ $cxx_compiler = default ]
+then
+  if [ -n "$path_KCC" ]
+  then
+    cxx_compiler=KCC
+    echo "==> Using $path_KCC"
+    path_cxx=$path_KCC
+    #cxx_opt=kcc
+  elif [ -n "$path_xlC" ]
+  then
+    cxx_compiler=XLC
+    echo "==> Using $path_xlC"
+    path_cxx=$path_xlC
+    #cxx_opt=cc
+  elif [ -n "$path_gxx" ]
+  then
+    cxx_compiler=GXX
+    echo "==> Using $path_gxx"
+    path_cxx=$path_gxx
+    #cxx_opt=gnu
+  elif [ -n "$path_egxx" ]
+  then
+    cxx_compiler=EGXX
+    echo "==> Using $path_egxx"
+    path_cxx=$path_egxx
+    #cxx_opt=gnu
+  elif [ -n "$path_cpp" ]
+  then
+    cxx_compiler=CPP
+    echo "==> Using $path_cpp"
+    path_cxx=$path_cpp
+    #cxx_opt=cc
+  elif [ -n "$path_CC" ]
+  then
+    cxx_compiler=CC
+    if [ $ARCH = "CRAY" -o $ARCH = "CRAYX1" ]
+    then
+      cxx_compiler=CRAYCC
+    fi
+    echo "==> Using $path_CC"
+    path_cxx=$path_egxx
+    #cxx_opt=cc
+  elif [ -n "$path_cxx" ]
+  then
+    cxx_compiler=CXX
+    echo "==> Using $path_cxx"
+    path_cxx=$path_cxx
+    #cxx_opt=cc
+  elif [ -n "$path_pgCC" ]
+  then
+    cxx_compiler=PGI
+    echo "==> Using $path_pgCC"
+    path_cxx=$path_pgCC
+    #cxx_opt=cc
+  elif [ -n "$path_icpc" ]
+  then
+    cxx_compiler=ICPC
+    echo "==> Using $path_icpc"
+    path_cxx=$path_icpc
+    #cxx_opt=cc
+  elif [ -n "$path_ecpc" ]
+  then
+    cxx_compiler=ECPC
+    echo "==> Using $path_ecpc"
+    path_cxx=$path_ecpc
+    #cxx_opt=cc
+  elif [ -n "$path_pathcc" ]
+  then
+    cxx_compiler=PATHCC
+    echo "==> Using $path_pathcc"
+    path_cxx=$path_pathcc
+    #cxx_opt=cc
+  elif [ -n "$path_orcc" ]
+  then
+    cxx_compiler=ORCC
+    echo "==> Using $path_orcc"
+    path_orcc=$path_orcc
+    #cxx_opt=cc
+  elif [ -n "$path_scgcc" ]
+  then
+    cxx_compiler=SCGCC
+    echo "==> Using $path_scgcc"
+    path_scgcc=$path_scgcc
+    #cxx_opt=cc
+  else
+    echo "ERROR: no C++ compiler found"
+    exit
+  fi
+fi
+if [ "$useropt" = default ]
+then
+  if [ $cxx_compiler = KCC ]
+  then 
+    useropt=+K2
+  else
+    useropt=-O2
+  fi
+fi
+opt=`echo $useropt | sed -e 's/#/ /g' -e 's/^$/(none)/'`
+echo "==> Default compiler options are $opt"
+opt=`echo $useropt | sed -e 's/#/ /g'`
+
+#-- if -arch is specified use it
+#--------------------------------
+if [ $ARCH = IRIXO32 ] 
+then 
+  path_cxx="$path_cxx -o32"
+  opt="-o32 $opt"
+fi
+
+if [ $ARCH = IRIXN32 ] 
+then
+  path_cxx="$path_cxx -n32"
+  opt="-n32 $opt"
+fi
+
+if [ $ARCH = IRIX64 ] 
+then
+  path_cxx="$path_cxx -64"
+  opt="-64 $opt"
+fi
+
+if [ $enable_old_headers = yes ]
+then
+  opt="$opt -D_OLD_HEADER_"
+fi
+
+#-- Fix Makefiles
+#----------------
+if sed -e "s@^PLATFORM=.*\$@PLATFORM=$PLATFORM@" \
+       -e "s@^PDTDIR=.*\$@PDTDIR=$PDTDIR@" \
+       -e "s@^COMPDIR=.*\$@COMPDIR=$COMPDIR@" \
+       -e "s@#$ARCH#\(.*\)@\1#$ARCH#@" \
+       Makefile > /tmp/config.$$
+then
+  mv /tmp/config.$$ Makefile
+else
+  echo "ERROR: cannot configure Makefiles"
+  exit
+fi
+if sed -e "s@\(.*\)#EOC#\(.*\)@\2\1#EOC#@" \
+       -e "s@#$cxx_compiler#\(.*\)@\1#$cxx_compiler#@" \
+       -e "s@^USEROPT=.*\$@USEROPT=$opt@" \
+       -e "s@^PDT_GXX=.*\$@PDT_GXX=$path_cxx@" \
+       -e "s@#$ARCH#\(.*\)@\1#$ARCH#@" \
+       ductape/Makefile > /tmp/config.$$
+then
+  mv /tmp/config.$$ ductape/Makefile
+else
+  echo "ERROR: cannot configure Makefiles"
+  exit
+fi
+if sed -e "s@\(.*\)#EOC#\(.*\)@\2\1#EOC#@" \
+       -e "s@#$cxx_compiler#\(.*\)@\1#$cxx_compiler#@" \
+       -e "s@^USEROPT=.*\$@USEROPT=$opt@" \
+       -e "s@#$ARCH#\(.*\)@\1#$ARCH#@" \
+       -e "s@^PLATFORM=.*\$@PLATFORM=$PLATFORM@" \
+       -e "s@^COMPDIR=.*\$@COMPDIR=$COMPDIR@" \
+       -e "s@^PDTDIR=.*\$@PDTDIR=$PDTDIR@" \
+       ductape/src/Makefile > /tmp/config.$$
+then
+  mv /tmp/config.$$ ductape/src/Makefile
+  echo "==> Makefiles were configured"
+else
+  echo "ERROR: cannot configure Makefiles"
+  exit
+fi
+
+#-- Check if Apple XCode bug is there with -D_XOPEN_SOURCE 
+if [ $PLATFORM=apple ]; then
+  CLANG_BUG=no
+  echo "Checking for Apple Xcode bug (Nov 2017) with MACH Ports: ${nnl}"
+  if $path_cxx ductape/lib/pdbRead.cc -c -Iductape/inc -D_XOPEN_SOURCE  1> /dev/null 2>&1 ; then
+    echo "Bug not found." 
+  else
+    if $path_cxx ductape/lib/pdbRead.cc -c -Iductape/inc  1> /dev/null 2>&1 ; then
+      echo "Found Apple CLANG bug with -D_XOPEN_SOURCE. Fixing..."  
+      if sed -e "s@#PDT_APPLE_BUGFIX#\(.*\)@\1#PDT_APPLE_BUGFIX#@" ductape/Makefile > /tmp/config.$$
+      then
+  	mv /tmp/config.$$ ductape/Makefile
+      else
+        echo "ERROR: cannot fix Apple bug in ductape/Makefile"
+        exit
+      fi
+    else
+      echo "Bug can't be fixed with this version of the compiler."
+    fi
+  fi
+fi
+
+
+if [ -f ductape/src/tau_instrumentor/tau_instrumentor.cpp ] ; then
+    INST_EXP="s@^PROG=.*\$@PROG=tau_instrumentor@"
+    INSTALL_EXP="s@^INSTALL=.*\$@INSTALL=cp \$(PROG) \$(BIN)@"
+else
+    INST_EXP="s@^PROG=.*\$@PROG=@"
+    INSTALL_EXP="s@^INSTALL=.*\$@INSTALL=@"
+fi
+
+if sed -e "s@\(.*\)#EOC#\(.*\)@\2\1#EOC#@" \
+       -e "s@#$cxx_compiler#\(.*\)@\1#$cxx_compiler#@" \
+       -e "s@^USEROPT=.*\$@USEROPT=$opt@" \
+       -e "s@#$ARCH#\(.*\)@\1#$ARCH#@" \
+       -e "s@^PLATFORM=.*\$@PLATFORM=$PLATFORM@" \
+       -e "s@^COMPDIR=.*\$@COMPDIR=$COMPDIR@" \
+       -e "s@^PDTDIR=.*\$@PDTDIR=$PDTDIR@" \
+       -e $INST_EXP \
+       -e "$INSTALL_EXP" \
+       ductape/src/tau_instrumentor/Makefile > /tmp/config.$$
+then
+    mv /tmp/config.$$ ductape/src/tau_instrumentor/Makefile
+    echo "==> Makefiles were configured"
+else
+    echo "ERROR: cannot configure Makefiles"
+    exit
+fi
+
+# DON'T Discover path to the header files. Use include/kai dir
+##-- Discover the paths for standard system include directories
+##-------------------------------------------------------------
+#$echo "Looking for C++ compilers standard include paths ... ${nnl}"
+#cat << EOF > /tmp/get_stdinc.C
+##include <ctype.h>
+##include <iostream.h>
+#EOF
+#if [ $cxx_compiler = EGXX -o $cxx_compiler = GXX ]
+#then 
+#  echo "#include <_G_config.h>" >> /tmp/get_stdinc.C
+#  echo "#include <iso646.h>" >> /tmp/get_stdinc.C
+#fi
+#
+#cat << EOF > /tmp/find_stdinc.awk
+#BEGIN {cinc=""; cppinc=""; g1inc=""; g2inc="";}
+#/^#[0123456789]+ ".+\/ctype.h"/ {cinc = substr(\$2, 2, length(\$2)-10);}
+#/^#line [0123456789]+ ".+\/ctype.h"/ {cinc = substr(\$3, 2, length(\$3)-10);}
+#/^# [0123456789]+ ".+\/ctype.h"/ {cinc = substr(\$3, 2, length(\$3)-10);}
+#/^#[0123456789]+ ".+\/iostream.h"/ {cppinc = substr(\$2, 2, length(\$2)-13);}
+#/^#line [0123456789]+ ".+\/iostream.h"/ {cppinc = substr(\$3, 2, length(\$3)-13);}
+#/^# [0123456789]+ ".+\/iostream.h"/ {cppinc = substr(\$3, 2, length(\$3)-13);}
+#/^#[0123456789]+ ".+\/_G_config.h"/ {g1inc = substr(\$2, 2, length(\$2)-14);}
+#/^#line [0123456789]+ ".+\/_G_config.h"/ {g1inc = substr(\$3, 2, length(\$3)-14);}
+#/^# [0123456789]+ ".+\/_G_config.h"/ {g1inc = substr(\$3, 2, length(\$3)-14);}
+#/^#[0123456789]+ ".+\/iso646.h"/ {g2inc = substr(\$2, 2, length(\$2)-11);}
+#/^#line [0123456789]+ ".+\/iso646.h"/ {g2inc = substr(\$3, 2, length(\$3)-11);}
+#/^# [0123456789]+ ".+\/iso646.h"/ {g2inc = substr(\$3, 2, length(\$3)-11);}
+#END { if (cinc != "") printf("-I%s ", cinc); if (cppinc != "") printf("-I%s ", cppinc); if (g1inc != "") printf("-I%s ", g1inc); if (g2inc != "") printf("-I%s ", g2inc); printf("\n"); }
+#EOF
+#
+#if ( $path_cxx -E /tmp/get_stdinc.C) 1>/dev/null 2>&1
+#then
+#  stdinc=`$path_cxx -E /tmp/get_stdinc.C | awk -f /tmp/find_stdinc.awk`
+#else
+#  echo "Error"
+#  echo "Cannot auto-detect the path to the header files."
+#  echo "Enter the directory containing system and C++ header files "
+#  echo "(e.g., -I/usr/include -I/usr/local/packages/kcc/KCC_BASE/include):"
+#  read stdinc
+#fi
+
+
+#xstdinc=`$path_cxx -E /tmp/get_stdinc.C | sed -n \
+#  -e '/\.h"/s@^.*"\(.*\)/ctype.h".*$@-I\1@p' \
+#  -e '/\.h"/s@^.*"\(.*\)/iostream.h".*$@-I\1@p' | sort -u | tr '\012' ' '`
+
+#/bin/rm -f /tmp/get_stdinc.C /tmp/find_stdinc.awk
+
+#echo "done"
+#echo "==> Using $stdinc"
+#######################################################################
+
+# Find the compiler defines
+cat << EOF  > getword.c
+#include <stdio.h>
+
+int main()
+{
+  int c;
+  while ((c = fgetc(stdin)) != EOF) 
+  { 
+    putc(c,stdout);
+    if (c == ' ')
+      putc('\n',stdout);
+  }
+  return 0;
+
+}
+EOF
+
+cat << EOF > getcompdefines
+#!/bin/sh
+\$* -v -c getword.c 1>pdtdata 2>&1
+if [ ! -f getword ] 
+then
+  cc getword.c -o getword >/dev/null 2>&1
+fi 
+./getword < pdtdata | grep '^-D' | grep -v ':'  >pdtdata2
+echo "COMPILER_OPTS=\\""
+cat pdtdata2
+echo "\\""
+/bin/rm -f pdtdata pdtdata2 
+EOF
+
+chmod +x getcompdefines
+compdefines=`./getcompdefines $path_cxx`
+/bin/rm -f getcompdefines getword.c getword.o getword
+
+# Find the directory where edgcpfe and taucpdisp will reside 
+bindir=`echo $PDTDIR | sed -e 's,^/tmp_mnt/nfs,,' -e 's,^/tmp_mnt,,'`
+# The following is now handled by make and make install
+#if [ ! -f $bindir/$PLATFORM/lib/libpdb-$cxx_opt.a ] 
+#then
+#  echo 
+#  echo "ERROR: The desired library $PLATFORM/libpdb-$cxx_opt.a is not available."
+#  echo "       Please choose another compiler or send mail to pdtoolkit@acl.lanl.gov."
+#  echo 
+#else 
+#  echo "cd $bindir/$PLATFORM/lib; /bin/rm -f libpdb.a; ln -s libpdb-$cxx_opt.a libpdb.a"
+#  `cd $bindir/$PLATFORM/lib; /bin/rm -f libpdb.a; ln -s libpdb-$cxx_opt.a libpdb.a`
+#fi
+
+
+if [ $targetprefix_given = yes ] ; then
+    bindir=$targetprefixdir
+fi
+
+
+#-- Fix cparse/cxxparse
+#---------------
+filestobefixed='cparse cxxparse f90parse f95parse gfparse gfparse48'
+if [ -r $PLATFORM/bin/edgcpfe4101 ]; then
+  filestobefixed="$filestobefixed cxxparse4101 cparse4101"
+fi
+for f in $filestobefixed 
+do
+  if sed -e "s@\(.*\)#EOC#\(.*\)@\2\1#EOC#@" \
+         -e "s@#$cxx_compiler#\(.*\)@\1#$cxx_compiler#@" \
+         -e "s@#$ARCH#\(.*\)@\1#$ARCH#@" \
+         -e "s@^BINDIR=.*\$@BINDIR=$bindir/$PLATFORM/$COMPDIR/bin@" \
+         -e "s@^PDTDIR=.*\$@PDTDIR=$bindir@" \
+         $f.proto > /tmp/$f.$$
+  then
+    /bin/rm -f $f
+    if [ $ARCH = "OSF1" -o $ARCH = "SOL2" -o $ARCH = "SOLARIS2-64" -o $ARCH = "SUN386I" -o $ARCH = "SUNX86_64" ] 
+    then
+      echo "#!/bin/ksh " > $f 
+    else
+      if [ $ARCH = "ARM32LINUX" -o $ARCH = "ARM64LINUX" -o $ARCH = "X86_64" -o $PLATFORM = "ibm64" -o $PLATFORM = "ibm64linux" ] 
+      then
+        echo "#!/bin/bash " > $f
+      else
+        echo "#!/bin/sh " > $f
+      fi
+    fi
+    echo $compdefines >> $f
+    echo "" >> $f
+    cat /tmp/$f.$$ >> $f
+    mv $f $PDTDIR/$PLATFORM/$COMPDIR/bin/$f
+    chmod ugo+x $PDTDIR/$PLATFORM/$COMPDIR/bin/$f
+    /bin/rm -f /tmp/$f.$$
+    echo "==> $f was configured"
+  else
+    echo "ERROR: cannot configure $f"
+    exit
+  fi
+done
+
+if [ -r $PLATFORM/bin/edgcpfe4101 -a -f $PDTCURWD/contrib/rose/rose-header-gen.tar.gz ]
+then
+  echo "Unpacking ROSE header generator:"
+  if [ ! -d $PDTDIR/contrib/rose/rose-header-gen ]
+  then
+    mkdir -p $PDTDIR/contrib/rose
+    cd $PDTDIR/contrib/rose;
+    $tar_cmd zxf $PDTCURWD/contrib/rose/rose-header-gen.tar.gz;
+    cd rose-header-gen;
+    if [ $PLATFORM = "ibm64" ]; then
+      echo "Applying special options for IBM"
+      export OBJECT_MODE=64
+      mkdir -p tmpbin; cd tmpbin; ln -s /opt/freeware/bin/ln . ; ln -s /opt/freeware/bin/sed . ; cd ..
+      export PATH=${PWD}/tmpbin:$PATH
+      echo "PATH=$PATH"
+      /bin/bash ./configure 
+      /bin/rm -f tmpbin
+      unset OBJECT_MODE
+    else
+      ./configure;
+    fi
+    
+    cd $PDTCURWD
+  fi
+fi
+
+if [ $PLATFORM = x86_64 -a -f $PDTCURWD/contrib/rose/roseparse.tar.gz -a ! -f $PDTDIR/$PLATFORM/$COMPDIR/bin/roseparse ]
+then
+  echo "Unpacking ROSE parser:"
+  if [ ! -d $PDTDIR/contrib/rose/roseparse ] 
+  then
+    mkdir -p $PDTDIR/contrib/rose
+    /bin/rm -f $PDTDIR/$PLATFORM/$COMPDIR/bin/roseparse
+    /bin/rm -f $PDTDIR/$PLATFORM/$COMPDIR/bin/upcparse
+    cd $PDTDIR/contrib/rose; 
+    $tar_cmd zxf $PDTCURWD/contrib/rose/roseparse.tar.gz; 
+    cd roseparse; 
+    ./configure; 
+    cd $PDTDIR/$PLATFORM/$COMPDIR/bin; 
+    /bin/rm -f roseparse edg33-upcparse upcparse; 
+    ln -s $PDTDIR/contrib/rose/roseparse/roseparse . ; 
+    ln -s $PDTDIR/contrib/rose/roseparse/upcparse edg33-upcparse ; 
+    ln -s edg33-upcparse ./upcparse;
+    cd $PDTCURWD
+  fi
+fi
+
+if [ -d $PDTCURWD/contrib/rose/edg44/$PLATFORM -a -f $PDTCURWD/contrib/rose/edg44/$PLATFORM/roseparse.tar.gz -a ! -f $PDTDIR/$PLATFORM/$COMPDIR/bin/edg44-cxx-roseparse ] 
+then
+  echo "Unpacking ROSE parser based on EDG 4.4:"
+  if [ ! -d $PDTDIR/contrib/rose/edg44/$PLATFORM/roseparse ]
+  then
+    mkdir -p $PDTDIR/contrib/rose/edg44/$PLATFORM;
+    /bin/rm -f $PDTDIR/$PLATFORM/$COMPDIR/bin/edg44-cxx-roseparse
+    /bin/rm -f $PDTDIR/$PLATFORM/$COMPDIR/bin/edg44-c-roseparse
+    /bin/rm -f $PDTDIR/$PLATFORM/$COMPDIR/bin/edg44-upcparse
+    cd $PDTDIR/contrib/rose/edg44/$PLATFORM;
+    $tar_cmd zxf $PDTCURWD/contrib/rose/edg44/$PLATFORM/roseparse.tar.gz;
+    cd roseparse;
+    ./configure;
+    cd $PDTDIR/$PLATFORM/$COMPDIR/bin;
+    ln -s $PDTDIR/contrib/rose/edg44/$PLATFORM/roseparse/edg44-cxx-roseparse . ;
+    ln -s $PDTDIR/contrib/rose/edg44/$PLATFORM/roseparse/edg44-c-roseparse . ;
+    ln -s $PDTDIR/contrib/rose/edg44/$PLATFORM/roseparse/edg44-upcparse . ;
+#    /bin/rm -f ./upcparse
+#    ln -s edg44-upcparse upcparse
+    cd $PDTCURWD
+  fi
+fi
+
+if [ $PLATFORM = x86_64 -a -f $PDTCURWD/contrib/maqao/maqao.tar.gz ]
+then 
+   echo "Unpacking Maqao instrumentor:"
+   if [ ! -d $PDTDIR/contrib/maqao/maqao ]
+   then 
+     mkdir -p $PDTDIR/contrib/maqao
+     cd $PDTDIR/contrib/maqao
+     /bin/rm -f $PDTDIR/$PLATFORM/$COMPDIR/bin/smaqao
+     $tar_cmd zxf $PDTCURWD/contrib/maqao/maqao.tar.gz 
+     cd $PDTDIR/$PLATFORM/$COMPDIR/bin
+     ln -s $PDTDIR/contrib/maqao/maqao/smaqao . ;
+     cd $PDTCURWD
+   fi
+fi
+
+
+if [ $PLATFORM = x86_64 -a -f $PDTCURWD/contrib/pebil/pebil.tgz ]
+then  
+   echo "Unpacking PEBIL instrumentor:"
+   if [ ! -d $PDTDIR/contrib/pebil/pebil -o ! -L $PDTDIR/$PLATFORM/$COMPDIR/bin/pebil.static ] 
+   then
+     mkdir -p $PDTDIR/contrib/pebil
+     cd $PDTDIR/contrib/pebil
+     /bin/rm -f $PDTDIR/$PLATFORM/$COMPDIR/bin/pebil.static
+     $tar_cmd zxf $PDTCURWD/contrib/pebil/pebil.tgz
+     cd $PDTDIR/$PLATFORM/$COMPDIR/bin
+     ln -s $PDTDIR/contrib/pebil/pebil/pebil.static . ;
+     cd $PDTCURWD
+   fi
+fi
+
+
+#-- Complete configuration
+#-------------------------
+echo ""
+echo "Configuration is complete!"
+echo ""
+echo "Run \"make\" and \"make install\""
+echo "Add \"$PDTDIR/$PLATFORM/$COMPDIR/bin\" to your path"
+exit 0
+

@@ -1,0 +1,11 @@
+The CHASM project [http://sourceforge.net/projects/chasm-interop] at LANL
+developed the PDB to XML converter (xmlgen.cc). For the latest version of 
+xmlgen.cc, please visit the website above. In the current release of xmlgen.cc, 
+support for Fortran is mostly complete. For more information on xmlgen please 
+contact:
+Matt Sottile (matt@lanl.gov) and Craig Rasmussen (crasmussen@lanl.gov).
+
+Usage: xmlgen <xmlfile> [<pdbfile> ...]
+
+Caveats:
+C++ templates or multiple inheritance are not yet supported.

@@ -1,0 +1,3 @@
+exclude_this_string /usr
+exclude_this_string kai
+write_html_files_to ../html

@@ -1,0 +1,316 @@
+<!--
+  ======================================================================
+     DTD for describing mappings between C++,C,F77,F90 and IDLs
+
+     Version 0.1
+
+     Primary Authors: Matt Sottile (LANL) / Craig Rasmussen (LANL)
+     Suggestions and ideas: Rob Armstrong (SNL/CA) / Ben Allan (SNL/CA) /
+                            Scott Kohn (LLNL)
+     Contact: Matt Sottile (matt@lanl.gov)
+
+
+     12/6/01: Initial version created.  See comments for (very) rough
+              explanation of each element.  sidl_sample.xml is an
+              example XML file that conforms to this DTD.
+              Problem so far: dealing with gt/lt symbols for arrays -
+              making the XML parser happy so it doesn't see them as
+              tag related, and not forcing the user to have to write
+              ugly, non-intuitive stuff.
+
+     1/7/02:  Updating scope to have an optional "file" field.  This
+              is to support scoping based on files, so in the case of C
+              one can make type mappings for a single file that don't apply
+              to all .C files that are compiled down to a single library.
+
+     1/9/02:  Added a bunch after thinking about some suggestions from
+              Ben, Scott, Rob, Steve, and Craig.  Instead of "sidl"
+              attributes, we have generic "idl" arguments.  Likely we'll
+              allow someone to specify the IDL type as part of the
+              attributes - then we can have one file with typemaps for
+              multiple IDL targets.  Also made signatures consistent
+              throughout, added a language attribute to the code tag (go
+              figure - people might care to know what language it is...)
+              and allowed users to put a code element inside a typemap,
+              so code for conversion and other such work can be associated
+              with typemaps instead of at the method level.
+
+     6/10/02: Major updates for type representation (kind/ikind/fkind replace
+              primitive string.).  Gotta get ready for the CCA meeting!
+              Current state of DTD is sufficient for Fortran77/Fortran90.
+              C/C++ still need work.  ikind and fkind borrowed from
+	      PDT/Ductape and reflect all possible integer and floating point
+	      data types currently supported in Fortran, C, and C++.
+
+     7/19/02: Adding support for structures (user defined types in F90,
+              structs in C/C++, and classes with data fields in C++).
+
+     7/24/02: Added array and dimension tags.
+
+      8/6/02: Added pointer tag for ptr and fptr kinds. 
+
+     8/13/02: Updates to clean DTD, fix support for classes and add other
+              things that are more C++ friendly.  This will bring the DTD
+              up to date with C and C++, in addition to keeping Fortran
+              (77/90) support.  Merged class and structure elements.
+
+     8/14/02: Massive revisions.  Most code written before this date will
+              not be compatible with the new DTD!!!  VERY IMPORTANT!!!
+
+     8/29/02: Updates to add abbreviated name attribute to many fields for
+              aiding with Fortran name length restrictions.  Also added
+              more stuff to the types for dealing with templates.
+
+      9/4/02: Added clen to type as an attribute to capture string length
+              in fortran (since if kind=fchar, we don't see an array of
+              characters)
+
+     9/26/02: Added context to structures to make Craig happy.
+
+    10/17/02: Added proceduremap and concrete elements to deal with F90
+              INTERFACE blocks that define generic procedures.
+
+  ======================================================================
+-->
+
+<!--
+    library : a library is a collection of scopes.  A C++ class library,
+              set of F90 modules, or a subroutine library in C or F77
+              all are examples of Libraries.
+
+    ATTRIBUTES:
+      name    : name of the library
+      version : version of the library this file represents
+      lang    : language the library is written in
+-->
+<!ELEMENT library (scope)+>
+<!ATTLIST library name CDATA #REQUIRED
+                  version CDATA #REQUIRED
+                  lang (cxx | c | fortran | python | ruby | java) #REQUIRED>
+
+<!--
+    scope : a scope is a collection of methods, classes (OO only),
+            and other scopes.  The embedding of scopes
+            is most relevant for representing concepts such as Java
+            package hierarchies.  NOTE: If 'protected' in Java is available
+            in a similar feature of C++ that applies to namespaces, then
+            we can merge package and namespace.  Global is for methods and
+            entities that occur outside of some well defined scope.  Global
+            subroutines and functions can have explicit or implicit
+            interfaces (F77 and C allow for implicit interfaces).  The
+            interface keyword is ignored for non global scope types.
+          
+    ATTRIBUTES:
+      name      : name of the scope
+      file      : filename containing this scope since libraries can span
+                  multiple source files
+      abbrev    : abbreviated name, useful for fortran mangling
+      kind      : find of scope (java-like package, fortran-like module,
+                  c++ like namespace, or c/f77 style global declarations)
+      interface : if the scope is of kind global, then this specifies whether
+                  the interfaces in this scope are implicit or explicit.
+-->
+<!ELEMENT scope (proceduremap*,structure*,method*,scope*)>
+<!ATTLIST scope name NMTOKEN #IMPLIED
+                file CDATA #IMPLIED
+                abbrev NMTOKEN #IMPLIED
+                kind (package | module | namespace | global) #REQUIRED
+                interface (implied | explicit) "explicit">
+
+<!--
+    proceduremap : given a generic procedure name (an alias), this contains
+                   the set of concrete methods within this scope that this
+                   alias is implemented by.  This is necessary for generic
+                   method declarations in F9x INTERFACE blocks.  Must
+                   contain one or more concrete method implementations.
+                   
+    ATTRIBUTES:
+      name : the name of the generic, or alias, procedure.
+-->
+<!ELEMENT proceduremap (concrete+)>
+<!ATTLIST proceduremap name NMTOKEN #REQUIRED>
+
+<!--
+    concrete : this is simply the name of the concrete implementation
+               of an aliased procedure.  The aliased procedure represented
+               as a proceduremap will contain this element.  This element
+               serves as a link from the alias procedure to the element
+               defining the concrete method signature.
+
+    ATTRIBUTES:
+      name : the name of the concrete method
+-->
+<!ELEMENT concrete>
+<!ATTLIST name NMTOKEN #REQUIRED>
+
+<!--
+    method : represent a single method with 0 or more arguments, one
+             return value, and an optional block of code to be placed
+             in wrapper code that may call this method.  Signature
+             moved to IMPLIED and is expected to be removed in the future.
+
+    ATTRIBUTES:
+      name      : the name of the routine
+      sig       : the signature of the routine according to PDT
+      abbrev    : abbreviated name, useful for fortran mangling
+      kind      : kind of routine (final, virtual, etc...)
+      alias     : if this function is an implementation of an alias, this
+                  is the name of the alias.
+      templated : flag whether or not this is a templated method.
+-->
+<!ELEMENT method (arg*, return, code?)>
+<!ATTLIST method name NMTOKEN #REQUIRED
+                 sig CDATA #IMPLIED
+                 abbrev NMTOKEN #IMPLIED
+                 alias NMTOKEN #IMPLIED
+                 kind (final | virtual | abstract | static) static
+                 templated (yes | no) "no">
+
+<!--
+    arg : represent a single argument for a method or subroutine
+
+    ATTRIBUTES:
+      name   : the name of the argument
+      abbrev    : abbreviated name, useful for fortran mangling
+      intent : F90 style intent
+      idl    : IDL type for this argument
+-->
+<!ELEMENT arg (type)>
+<!ATTLIST arg name NMTOKEN #REQUIRED
+              abbrev NMTOKEN #IMPLIED
+              intent (in | out | inout) "in"
+              idl CDATA #IMPLIED>
+
+<!--
+    return : represent a return value.
+
+    ATTRIBUTES:
+      idl : IDL type for the return value
+-->
+<!ELEMENT return (type)>
+<!ATTLIST return idl CDATA #IMPLIED>
+
+<!--
+    code : code block to be cut and pasted into some wrapper generator.
+
+    ATTRIBUTES:
+      lang : language this wrapper glue code is written in
+      kind : if this is intended for a specific wrapper generator, this
+             attribute specifies which.  popular ones are enumerated.
+-->
+<!-- ***NOTE*** Is other even worth having, since theres no way to specify
+     what other one it refers to? -->
+<!ELEMENT code (#PCDATA)>
+<!ATTLIST code lang (cxx | c | fortran) #REQUIRED
+               kind (babel | chasm | other) #REQUIRED>
+
+<!--
+    structure: represent a structure with data fields (not necessarily
+               methods).
+
+    ATTRIBUTES:
+      kind      : The kind of structure this is (c struct, c++ class, or
+                  fortran derived type)
+      name      : Name of the type
+      abbrev    : abbreviated name, useful for fortran mangling
+      parent    : (OO ONLY) The sequence of class names of the parents
+      classkind : (OO ONLY) The kind of class represented here
+      templated : (C++ ONLY) A flag whether or not the class is templated
+-->
+<!ELEMENT structure (field*,method*)>
+<!ATTLIST structure kind (cstruct | cxxclass | fderived) #REQUIRED
+		    name NMTOKEN #REQUIRED
+                    abbrev NMTOKEN #IMPLIED
+                    parent NMTOKENS #IMPLIED
+                    classkind (concrete | virtual | abstract) "concrete"
+                    templated (yes | no) "no"
+		    context NMTOKEN #IMPLIED>
+
+<!--
+    field: represent a field in a structure
+
+    ATTRIBUTES:
+      name : the name of the field
+      abbrev    : abbreviated name, useful for fortran mangling
+-->
+<!ELEMENT field (type)>
+<!ATTLIST field name NMTOKEN #REQUIRED
+                abbrev NMTOKEN #IMPLIED>
+
+<!--
+    array: represent an array.  This is useful for storing information
+           about array shape that we don't want to mash in with the
+           kind/ikind/fkind stuff of the field, argument or return.
+
+           Assume that the number of dimensions corresponds to the rank
+           attribute.  If there aren't enough or are too many specified,
+           the parser will NOT complain, but the application should be
+           sane enough to check for this possibility.
+
+    ATTRIBUTES:
+      rank : the rank of the array
+-->
+<!ELEMENT array (dimension*, (type | indirect))>
+<!ATTLIST array rank NMTOKEN #REQUIRED>
+
+<!--
+    dimension: represent a single dimension in an array with an optional
+               lower bound (not specified implies 1 or 0 depending on the
+               language of the array), and an extent.  If the dimension
+               is not explicitly defined, the extent is specified as *.
+               In this case, the lower bound is to be disregarded.
+
+    ATTRIBUTES: 
+      lower_bound : the lower bound of this dimension.
+      extent      : the extent of this dimension.  A value of "*" implies
+                    that it is not explicitly defined.     
+-->
+<!ELEMENT dimension EMPTY>
+<!ATTLIST dimension lower_bound NMTOKEN #IMPLIED
+                    extent NMTOKEN #REQUIRED>
+
+<!--
+    indirect: a poiner or reference is a mechanism for indirection and this
+              element represents them.
+
+    ATTRIBUTES:
+      depth : depth of pointers or references
+      kind  : whether or not this is a pointer or reference
+-->
+<!ELEMENT indirect (array?,type)>
+<!ATTLIST indirect depth NMTOKEN #REQUIRED
+                   kind (pointer | reference) #REQUIRED>
+
+<!--
+    type: a data type, either custom (user defined) or intrinsic.
+
+    ATTRIBUTES:
+      kind        : the main kind of the type.  this is all of the PDT types
+                    plus: usertype, generic, object, and alias.  Usertype
+                    represents something like a C struct or Fortran derived
+                    type.  Generic is for templates and other generic typing
+                    schemes.  Objects are classes.  Aliases are for typedefs.
+      ikind       : Specific integer type info (long, int, etc...) from PDT
+      fkind       : Specific float type info (float, double, etc...) from PDT
+      usertype    : Name of the userdefined type if kind=usertype
+      objectname  : Name of the object if kind=object
+      context     : Name of the module where this type is declared.
+      clen        : Length of a string (if kind=fchar)
+      alias       : Name of the type BEING aliased if kind=alias
+      aliasname   : Name of the alias type itself if kind=alias
+      genericname : Name of the generic type (such as STL vector).  If the
+                    kind is generic, this field makes sense and we look at
+                    the type contained in this element.
+-->
+<!ELEMENT type (array? | indirect? | type?)>
+<!ATTLIST type kind (bool | enum | err | func | void | int | float | ptr | ref | array | tref | ptrmem | tparam | wchar | ferr | fvoid | fint | flogic | ffloat | ffunc | fchar | farray | fcmplx | funspecfunc | fbldat | fmod | fptr | usertype | generic | object | alias) #REQUIRED
+               ikind (char | schar | uchar | short | ushort | int | uint | long | ulong | longlong | ulonglong | wchar) #IMPLIED
+               fkind (float | dbl | longdbl) #IMPLIED
+               usertype NMTOKEN #IMPLIED
+               objectname NMTOKEN #IMPLIED
+               context NMTOKEN #IMPLIED
+	       clen NMTOKEN #IMPLIED
+               alias NMTOKEN #IMPLIED
+               aliasname NMTOKEN #IMPLIED
+               genericname NMTOKEN #IMPLIED>
+

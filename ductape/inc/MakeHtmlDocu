@@ -1,0 +1,10 @@
+#!/bin/sh
+
+if [ ! -d ../html ]
+then
+  mkdir ../html
+fi
+
+cxxparse pdbAll.h
+pdbhtml pdbAll.h.pdb
+rm pdbAll.h.pdb

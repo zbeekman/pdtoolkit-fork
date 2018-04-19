@@ -1,0 +1,130 @@
+#!/bin/sh
+#/*************************************************************************/
+#/* Program Database Toolkit (PDT)                                        */
+#/* Copyright (C) 1998-2008                                               */
+#/* University of Oregon, Department of Computer and Information Science  */
+#/* Forschungszentrum Juelich, Zentralinstitut fuer Angewandte Mathematik */
+#/* Los Alamos National Laboratory, Advanced Computing Laboratory         */
+#/*************************************************************************/
+
+unpack=no
+platforms="alpha apple Windows hitachi hp9000s700 linux rs6000 sgi32 sgin32 sgi64 solaris2 t3e crayx1 ppc64 ia64 sun386i x86_64 mips arm_linux arm64_linux ibm64linux"
+
+tau=
+
+for arg in "$@"
+do 
+  case $arg in 
+  -u)
+     unpack=yes
+     shift
+     ;;
+
+  -platform=*)
+     platforms=`echo $arg | sed -e 's/-platform=//'`
+     shift
+     ;;
+
+  -tau=*)
+     tau=`echo $arg | sed -e 's/-tau=//'`
+     shift
+     ;;
+
+  *) 
+   echo "ERROR: Command line switch \`$arg' not recognized"
+   echo "Usage: $0 [-u] [-platform=<arch>]"
+   exit 1
+   ;;
+  esac
+done
+
+if [ "x$unpack" = "xno" ] ; then
+    if [ "x$tau" != "x" ] ; then
+	echo "Copying tau_instrumentor sources ..."
+	cp $tau/utils/tau_instrument.cpp ductape/src/tau_instrumentor
+	cp $tau/utils/tau_instrument.h ductape/src/tau_instrumentor
+	cp $tau/utils/tau_instrumentor.cpp ductape/src/tau_instrumentor
+	cp $tau/utils/tau_selective.cpp ductape/src/tau_instrumentor
+	cp $tau/utils/tau_datatypes.h ductape/src/tau_instrumentor
+    else
+	echo "Warning: -tau=<dir> not specified, tau_instrumentor sources not included."
+    fi
+fi
+
+
+for i in $platforms
+do
+  if [ ${i} = crayxmt ]
+  then
+    cp -r x86_64 crayxmt  
+  fi
+
+  if [ $unpack = yes ]
+  then      
+    if [ -f ${i}/bin/edgcpfe.gz ]
+    then
+      echo "Unpacking $i/bin ..."
+      gunzip $i/bin/*.gz
+    fi
+
+    if [ -f ${i}/bin/pdt_gfortran/gfortran.gz ] ; then
+	echo "Unpacking $i/bin/pdt_gfortran ..."
+	gunzip $i/bin/pdt_gfortran/*.gz
+    fi
+    if [ -f ${i}/bin/pdt_gfortran48/gfortran.gz ] ; then
+	echo "Unpacking $i/bin/pdt_gfortran ..."
+	gunzip $i/bin/pdt_gfortran48/*.gz
+    fi
+  else 
+    if [ -f ${i}/bin/edgcpfe ]
+    then 
+      echo "Packing $i/bin ..."
+      gzip $i/bin/edgcpfe $i/bin/taucpdisp $i/bin/f90fe $i/bin/pdtf90disp 
+    fi
+    if [ -f ${i}/bin/edgcpfe4101 -a -f ${i}/bin/taucpdisp4101 ]
+    then 
+      echo "Packing EDG 4.10.1 binaries in $i/bin ..."
+      gzip $i/bin/edgcpfe4101 $i/bin/taucpdisp4101
+    fi
+    if [ -f ${i}/bin/pdtflint ]
+    then
+      gzip $i/bin/pdtflint
+    fi
+    if [ -f ${i}/bin/pdtflint.exe ]
+    then
+      gzip $i/bin/*.exe
+    fi
+
+    if [ -f ${i}/bin/pdt_gfortran/gfortran ] ; then
+	echo "packing $i/bin/pdt_gfortran ..."
+	gzip $i/bin/pdt_gfortran/*
+    fi
+
+    if [ -f ${i}/bin/pdt_gfortran48/gfortran ] ; then
+	echo "packing $i/bin/pdt_gfortran48 ..."
+	gzip $i/bin/pdt_gfortran48/*
+    fi
+  fi
+done
+
+if [ ! -h bgp ]
+then
+  ln -s ppc64 bgp
+fi
+
+if [ ! -h bgl ]
+then
+  ln -s ppc64 bgl
+fi
+
+if [ ! -h xt3 ]
+then
+  ln -s x86_64 xt3
+fi
+
+
+if [ ! -h craycnl ]
+then
+  ln -s x86_64 craycnl
+fi
+rm -f x86_64/bin/roseparse x86_64/bin/upcparse

@@ -1,0 +1,675 @@
+<html>
+<head>
+<title>DUCTAPE Primer</title>
+</head>
+
+<body bgcolor=#E0E0E0>
+<div align="center">
+<img alt="* D U C T A P E *" src="ductape.gif">
+</div>
+
+<h2 align="center">C++ Program<br>
+<font color="#FF0000">D</font>atabase
+<font color="#FF0000">U</font>tilities and
+<font color="#FF0000">C</font>onversion
+<font color="#FF0000">T</font>ools
+<font color="#FF0000">AP</font>plication
+<font color="#FF0000">E</font>nvironment</h2>
+
+<h1 align="center">-- Getting Started --</h1>
+
+<h2><hr>Overview<hr></h2>
+
+DUCTAPE is a C++ library that provides an object-oriented API to PDB files
+produced by the Fortran and C/C++ IL Analyzers. Each item type of the PDB
+format is represented by a class having a corresponding name. All information
+about these items is accessible through member functions of the DUCTAPE
+classes.  Common attributes were factored out into generic base classes,
+resulting in the following class hierarchy:
+
+<p>
+
+<table border=1>
+<tr><td><img src="duchier.gif"></td></tr>
+</table>
+
+<p>
+
+The class definitions in the following are not the real complete source
+code of the DUCTAPE classes but simplified versions which only show the
+most important and commonly used methods.  Please see the DUCTAPE
+<a href="index.html">HTML index</a> for complete descriptions.
+
+<h2><hr>Generic Base Classes<hr></h2>
+
+The internal base classes are useful in DUCTAPE application programs when
+heterogeneous lists of items must be processed or stored (for example,
+list&lt;pdbTemplateItem&gt; can store a list of all template instantiations).
+
+<p>
+
+<table border=1 width=663 cellpadding=10>
+
+<tr align=left valign=top><td>
+The root class of the hierarchy is pdbSimpleItem. pdbSimpleItems, and
+therefore all items derived from it, have two attributes, their name and
+PDB ID.
+<td BGcolor=#000000>
+<PRE><FONT color=#FFFFFF><B><FONT
+color=#60ff60>class</FONT></B> pdbSimpleItem {
+<B><FONT color=#ffff60>public</FONT></B>:
+  <B><FONT color=#60ff60>const</FONT></B> string&amp; name() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>int</FONT></B> id() <B><FONT color=#60ff60>const</FONT></B>;
+};                                              <!-- WM-->
+</font></PRE>
+
+<tr align=left valign=top><td>
+Derived from pdbSimpleItems are pdbFiles and more complex pdbItems, which
+have a source code location, possibly a parent group or namespace, and an
+access mode (e.g., public or private) if they are member of a group. The
+method fullname() returns fully-qualified names (including signatures for
+routines).
+<td BGcolor=#000000>
+<PRE><FONT color=#FFFFFF><B><FONT
+color=#60ff60>class</FONT></B> pdbItem : <B><FONT color=#ffff60>public</FONT></B> pdbSimpleItem {
+<B><FONT color=#ffff60>public</FONT></B>:
+  <B><FONT color=#60ff60>const</FONT></B> string&amp; fullName() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>const</FONT></B> pdbLoc&amp; location() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>const</FONT></B> pdbGroup* parentGroup() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>const</FONT></B> pdbNamespace* parentNSpace() <B><FONT color=#60ff60>const</FONT></B>;
+  access_t access() <B><FONT color=#60ff60>const</FONT></B>;
+};
+</font></PRE>
+<tr align=left valign=top><td>
+pdbItems are pdbPragmas, pdbMacros, pdbTypes, or so-called fat items.
+pdbFatItems have a header and a body, and attributes describing the source
+location of these parts.
+<td BGcolor=#000000>
+<PRE><FONT color=#FFFFFF><B><FONT
+color=#60ff60>class</FONT></B> pdbFatItem: <B><FONT color=#ffff60>public</FONT></B> pdbItem {
+<B><FONT color=#ffff60>public</FONT></B>:
+  <B><FONT color=#60ff60>const</FONT></B> pdbLoc&amp; headBegin(<B><FONT color=#60ff60>void</FONT></B>) <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>const</FONT></B> pdbLoc&amp; headEnd  (<B><FONT color=#60ff60>void</FONT></B>) <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>const</FONT></B> pdbLoc&amp; bodyBegin(<B><FONT color=#60ff60>void</FONT></B>) <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>const</FONT></B> pdbLoc&amp; bodyEnd  (<B><FONT color=#60ff60>void</FONT></B>) <B><FONT color=#60ff60>const</FONT></B>;
+};
+</font></PRE>
+
+<tr align=left valign=top><td>
+pdbFatItems include pdbTemplates, pdbNamespaces, and pdbTemplateItems.
+pdbTemplateItems are entities that can be instantiated from templates.
+Template items are pdbGroups, pdbGroupFields, pdbRoutines.
+<td BGcolor=#000000>
+<PRE><FONT color=#FFFFFF><B><FONT
+color=#60ff60>class</FONT></B> pdbTemplateItem: <B><FONT color=#ffff60>public</FONT></B> pdbFatItem {
+<B><FONT color=#ffff60>public</FONT></B>:
+  <B><FONT color=#60ff60>const</FONT></B> pdbTemplate *isTemplate() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>bool</FONT></B> isSpecialized() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>const</FONT></B> targvec&amp; speclArguments() <B><FONT color=#60ff60>const</FONT></B>;
+};
+</font></PRE>
+
+<tr align=left valign=top><td>
+Groups represent abstract data types, i.e. collections of public and
+private members. Members are divided into data members (described by
+pdbGroupFields) and member functions/methods (described by pdbRoutines).
+The different kind of groups are Fortran 90 derived types or modules,
+or C and C++ structs, unions, or classes.
+<td BGcolor=#000000>
+<PRE><FONT color=#FFFFFF><B><FONT
+color=#60ff60>class</FONT></B> pdbGroup : <B><FONT color=#ffff60>public</FONT></B> pdbTemplateItem {
+<B><FONT color=#ffff60>public</FONT></B>:
+  <B><FONT color=#60ff60>const</FONT></B> fieldvec&amp; dataMembers() <B><FONT color=#60ff60>const</FONT></B>;
+  group_t kind() <B><FONT color=#60ff60>const</FONT></B>;
+};
+</font></PRE>
+
+<tr align=left valign=top><td>
+Routines describes the common part of global functions, Fortran 90 local
+and module functions, and C++ class methods. The common atrributes are
+signature, kind (e.g., extern or intrinsic), specialKind (e.g., constructor
+or operator), a list of routines called from this routine, how often it
+gets called from other routines, linkage, for C and C++ the statement
+representing the body and a list of all statements, and for C and Fortran
+routines the location of the first executable statement and of all return
+statements.
+<td BGcolor=#000000>
+<PRE><FONT color=#FFFFFF><B><FONT
+color=#60ff60>class</FONT></B> pdbRoutine : <B><FONT color=#ffff60>public</FONT></B> pdbTemplateItem {
+<B><FONT color=#ffff60>public</FONT></B>:
+  <B><FONT color=#60ff60>const</FONT></B> pdbType *signature() <B><FONT color=#60ff60>const</FONT></B>;
+  routine_t kind() <B><FONT color=#60ff60>const</FONT></B>;
+  rspec_t specialKind() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>const</FONT></B> callvec&amp; callees() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>int</FONT></B> numCalled() <B><FONT color=#60ff60>const</FONT></B>;
+  link_t linkage() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>const</FONT></B> pdbStmt* body() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>const</FONT></B> stmtvec&amp; statements() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>const</FONT></B> pdbLoc&amp; firstExecStmtLocation() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>const</FONT></B> locvec&amp; returnLocations() <B><FONT color=#60ff60>const</FONT></B>;
+};
+</font></PRE>
+
+</tr>
+</table>
+
+<p>
+
+The following conventions are used within the DUCTAPE library:
+<ul>
+<li>Attributes of items representing references to other entities
+are implemented in DUCTAPE by pointers to the corresponding objects,
+allowing easy navigation through the available program information.
+<p>
+<li>Attributes representing a collection of items T (e.g., list of
+arguments or list of members) are stored using a C++ STL vector&lt;T*&gt;.
+The usual STL vector methods (like size() or iterators) can then be used to
+process the collection. Typedefs for the collections are provided by the
+corresponding classes and are always named ###vec.
+<p>
+<li>Enumeration types (e.g., describing possible values for the kind of items)
+are always named xxx_t and defined in class pdbItem.
+</ul>
+
+<h2><hr>PDB Item Describing Classes<hr></h2>
+
+These classes are the main part of the DUCTAPE library. They are shown in
+<b>bold type</b> in the class hierarchy. They are based on the generic base
+classes (see above) and make use of the helper classes (see below). They
+represent items listed in a PDB file. We only show their basic
+functionality here; for full details please see the DUCTAPE
+<a href="index.html">HTML index</a>.
+
+<p>
+
+Please note that inherited methods from the generic base classes are
+<b>not</b> shown here; so these classes have actually a much larger number
+of methods.
+
+<p>
+
+<table border=1 width=663 cellpadding=10>
+
+<tr align=left valign=top><td>
+pdbFile
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;
+&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;
+<td BGcolor=#000000>
+<PRE><FONT color=#FFFFFF><B><FONT
+color=#60ff60>class</FONT></B> pdbFile : <B><FONT color=#ffff60>public</FONT></B> pdbSimpleItem {
+<B><FONT color=#ffff60>public</FONT></B>:
+  <B><FONT color=#60ff60>const</FONT></B> incvec&amp; includes() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>int</FONT></B> numCalled() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>bool</FONT></B> isSystemFile() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>const</FONT></B> cmtvec&amp; comments() <FONT color=#60ff60>const</FONT></B>;
+};                                              <!-- WM-->
+</font></PRE>
+
+<tr align=left valign=top><td>
+pdbPragma
+<td BGcolor=#000000>
+<PRE><FONT color=#FFFFFF><B><FONT
+color=#60ff60>class</FONT></B> pdbPragma : <B><FONT color=#ffff60>public</FONT></B> pdbItem {
+<B><FONT color=#ffff60>public</FONT></B>:
+  string kind() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>const</FONT></B> pdbLoc&amp; prBegin() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>const</FONT></B> pdbLoc&amp; prEnd() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>const</FONT></B> string&amp; text() <B><FONT color=#60ff60>const</FONT></B>;
+};
+</font></PRE>
+
+<tr align=left valign=top><td>
+pdbMacro
+<td BGcolor=#000000>
+<PRE><FONT color=#FFFFFF><B><FONT
+color=#60ff60>class</FONT></B> pdbMacro : <B><FONT color=#ffff60>public</FONT></B> pdbItem {
+<B><FONT color=#ffff60>public</FONT></B>:
+  macro_t kind() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>const</FONT></B> string&amp; text() <B><FONT color=#60ff60>const</FONT></B>;
+};
+</font></PRE>
+
+<tr align=left valign=top><td>
+pdbType
+<td BGcolor=#000000>
+<PRE><FONT color=#FFFFFF><B><FONT
+color=#60ff60>class</FONT></B> pdbType : <B><FONT color=#ffff60>public</FONT></B> pdbItem {
+<B><FONT color=#ffff60>public</FONT></B>:
+  <B><FONT color=#60ff60>const</FONT></B> pdbType* elementType() <B><FONT color=#60ff60>const</FONT></B>;
+  float_t floatType() <B><FONT color=#60ff60>const</FONT></B>;
+  int_t integerType() <B><FONT color=#60ff60>const</FONT></B>;
+  type_t kind() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>const</FONT></B> qualvec&amp; qualifiers() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>const</FONT></B> pdbType* pointedToType() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>const</FONT></B> pdbType* referencedType() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>bool</FONT></B> isSigned() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>const</FONT></B> pdbType* baseType() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>const</FONT></B> pdbGroup* isGroup() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>const</FONT></B> pdbType* returnType() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>const</FONT></B> argvec&amp; arguments() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>bool</FONT></B> hasEllipsis() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>bool</FONT></B> isOldStyleDecl() <B><FONT color=#60ff60>const</FONT></B>;   <B><FONT color=#80a0ff>/*</FONT></B><B><FONT color=#80a0ff>C*/</FONT></B>
+  <B><FONT color=#60ff60>const</FONT></B> pdbType* memberPointerType() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>const</FONT></B> pdbClass* memberPointerClass() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>bool</FONT></B> isConst() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>int</FONT></B> numElements() <B><FONT color=#60ff60>const</FONT></B>; <B><FONT color=#80a0ff>// for C arrays
+                           // and f90 characters</FONT></B>
+  <B><FONT color=#60ff60>const</FONT></B> typevec&amp; exceptionSpec() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>const</FONT></B> enumvec&amp; enumeration() <B><FONT color=#60ff60>const</FONT></B>;
+  shape_t shape() <B><FONT color=#60ff60>const</FONT></B>;              <B><FONT color=#80a0ff>/*</FONT></B><B><FONT color=#80a0ff>f90*/</FONT></B>
+  <B><FONT color=#60ff60>int</FONT></B> rank() <B><FONT color=#60ff60>const</FONT></B>;                   <B><FONT color=#80a0ff>/*</FONT></B><B><FONT color=#80a0ff>f90*/</FONT></B>
+  <B><FONT color=#60ff60>const</FONT></B> boundvec&amp; bounds() <B><FONT color=#60ff60>const</FONT></B>;     <B><FONT color=#80a0ff>/*</FONT></B><B><FONT color=#80a0ff>f90*/</FONT></B>
+  <B><FONT color=#60ff60>bool</FONT></B> isStaticArray() <B><FONT color=#60ff60>const</FONT></B>;  <B><FONT color=#80a0ff>/*</FONT></B><B><FONT color=#80a0ff>C99*/</FONT></B>
+};
+</font></PRE>
+
+<tr align=left valign=top><td>
+pdbTemplate
+<td BGcolor=#000000>
+<PRE><FONT color=#FFFFFF><B><FONT
+color=#60ff60>class</FONT></B> pdbTemplate : <B><FONT color=#ffff60>public</FONT></B> pdbFatItem {
+<B><FONT color=#ffff60>public</FONT></B>:
+  templ_t kind() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>const</FONT></B> string&amp; text() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>const</FONT></B> targvec&amp; arguments() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>const</FONT></B> pdbCRoutine* funcProtoInst() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>const</FONT></B> pdbClass* classProtoInst() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>const</FONT></B> pdbType* statMemType() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>const</FONT></B> pdbTemplate* declaration() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>const</FONT></B> pdbTemplate* definition() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>const</FONT></B> targvec&amp; speclArguments() <B><FONT color=#60ff60>const</FONT></B>;
+};
+</font></PRE>
+
+<tr align=left valign=top><td>
+pdbNamespace
+<td BGcolor=#000000>
+<PRE><FONT color=#FFFFFF><B><FONT
+color=#60ff60>class</FONT></B> pdbNamespace : <B><FONT color=#ffff60>public</FONT></B> pdbFatItem {
+<B><FONT color=#ffff60>public</FONT></B>:
+  <B><FONT color=#60ff60>const</FONT></B> memvec&amp; members() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>const</FONT></B> pdbNamespace* isAlias() <B><FONT color=#60ff60>const</FONT></B>;
+};
+</font></PRE>
+
+<tr align=left valign=top><td>
+pdbClass
+<td BGcolor=#000000>
+<PRE><FONT color=#FFFFFF><B><FONT
+color=#60ff60>class</FONT></B> pdbClass : <B><FONT color=#ffff60>public</FONT></B> pdbGroup {
+<B><FONT color=#ffff60>public</FONT></B>:
+  <B><FONT color=#60ff60>const</FONT></B> basevec&amp; baseClasses() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>const</FONT></B> classvec&amp; derivedClasses() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>const</FONT></B> methodvec&amp; methods() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>bool</FONT></B> isABC() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>const</FONT></B> friendclassvec&amp; friendClasses() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>const</FONT></B> friendfuncvec&amp; friendRoutines() <B><FONT color=#60ff60>const</FONT></B>;
+};
+</font></PRE>
+
+<tr align=left valign=top><td>
+pdbModule
+<td BGcolor=#000000>
+<PRE><FONT color=#FFFFFF><B><FONT
+color=#60ff60>class</FONT></B> pdbModule : <B><FONT color=#ffff60>public</FONT></B> pdbGroup {
+<B><FONT color=#ffff60>public</FONT></B>:
+  <B><FONT color=#60ff60>const</FONT></B> modfuncvec&amp; funcMembers() <B><FONT color=#60ff60>const</FONT></B>;
+};
+</font></PRE>
+
+<tr align=left valign=top><td>
+pdbCRoutine
+<td BGcolor=#000000>
+<PRE><FONT color=#FFFFFF><B><FONT
+color=#60ff60>class</FONT></B> pdbCRoutine : <B><FONT color=#ffff60>public</FONT></B> pdbRoutine {
+<B><FONT color=#ffff60>public</FONT></B>:
+  virt_t virtuality() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>bool</FONT></B> covariantReturnVirtualOverride() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>bool</FONT></B> isInline() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>bool</FONT></B> isCompilerGenerated() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>bool</FONT></B> isExplicitCtor() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>bool</FONT></B> isStatic() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>bool</FONT></B> isVirtual() <B><FONT color=#60ff60>const</FONT></B>;
+};
+</font></PRE>
+
+<tr align=left valign=top><td>
+pdbFRoutine
+<td BGcolor=#000000>
+<PRE><FONT color=#FFFFFF><B><FONT
+color=#60ff60>class</FONT></B> pdbFRoutine : <B><FONT color=#ffff60>public</FONT></B> pdbRoutine {
+<B><FONT color=#ffff60>public</FONT></B>:
+  <B><FONT color=#60ff60>bool</FONT></B> isRecursive() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>bool</FONT></B> isElemental() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>bool</FONT></B> hasExplicitInterface() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>const</FONT></B> pdbFRoutine* parentRoutine() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>const</FONT></B> pdbFRoutine* isAliasFor() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>const</FONT></B> implvec&amp; implementedBy() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>const</FONT></B> locvec&amp; stopLocations() <B><FONT color=#60ff60>const</FONT></B>;
+};
+</font></PRE>
+
+<tr align=left valign=top><td>
+pdbGroupField
+<td BGcolor=#000000>
+<PRE><FONT color=#FFFFFF><B><FONT
+color=#60ff60>class</FONT></B> pdbGroupField : <B><FONT color=#ffff60>public</FONT></B> pdbTemplateItem {
+<B><FONT color=#ffff60>public</FONT></B>:
+  mem_t kind() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>const</FONT></B> pdbType *type() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>bool</FONT></B> isBitField() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>bool</FONT></B> isMutable() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>bool</FONT></B> isStaticConst() <B><FONT color=#60ff60>const</FONT></B>;
+};
+</font></PRE>
+
+</tr>
+</table>
+
+<h2><hr>Helper Classes<hr></h2>
+
+The first set of helper classes all represent things which have a source
+code location associated with them, so they all inherit from pdbLoc.
+
+<p>
+
+<table border=1 width=663 cellpadding=10>
+
+<tr align=left valign=top><td>
+pdbLoc describes source code locations which are characterized by
+a source file, a line number (starting with 1), and a character position
+within this line (starting with 0).
+<td BGcolor=#000000>
+<PRE><FONT color=#FFFFFF><B><FONT
+color=#60ff60>class</FONT></B> pdbLoc {
+<B><FONT color=#ffff60>public</FONT></B>:
+  <B><FONT color=#60ff60>const</FONT></B> pdbFile *file() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>int</FONT></B> line() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>int</FONT></B> col() <B><FONT color=#60ff60>const</FONT></B>;
+};                                              <!-- WM-->
+</font></PRE>
+
+<tr align=left valign=top><td>
+pdbCallee is used to represent a routine call (i.e., a call site).
+Attributes are the routine called, whether it is was called virtually,
+and the location of the call site.
+<td BGcolor=#000000>
+<PRE><FONT color=#FFFFFF><B><FONT
+color=#60ff60>class</FONT></B> pdbCallee : <B><FONT color=#ffff60>public</FONT></B> pdbLoc {
+<B><FONT color=#ffff60>public</FONT></B>:
+  <B><FONT color=#60ff60>const</FONT></B> pdbRoutine *call() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>bool</FONT></B> isVirtual() <B><FONT color=#60ff60>const</FONT></B>;
+};
+</font></PRE>
+
+<tr align=left valign=top><td>
+pdbBase describes a base class (super class) of a pdbClass. It provides
+methods to ask for the base class, its access mode (e.g., public or
+private), and whether the derivation was virtual.
+<td BGcolor=#000000>
+<PRE><FONT color=#FFFFFF><B><FONT
+color=#60ff60>class</FONT></B> pdbBase : <B><FONT color=#ffff60>public</FONT></B> pdbLoc {
+<B><FONT color=#ffff60>public</FONT></B>:
+  <B><FONT color=#60ff60>const</FONT></B> pdbClass *base() <B><FONT color=#60ff60>const</FONT></B>;
+  pdbItem::access_t access() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>bool</FONT></B> isVirtual() <B><FONT color=#60ff60>const</FONT></B>;
+};
+</font></PRE>
+
+<tr align=left valign=top><td>
+pdbMethod represents a member function (method) of a C++ class.
+<td BGcolor=#000000>
+<PRE><FONT color=#FFFFFF><B><FONT
+color=#60ff60>class</FONT></B> pdbMethod : <B><FONT color=#ffff60>public</FONT></B> pdbLoc {
+<B><FONT color=#ffff60>public</FONT></B>:
+  <B><FONT color=#60ff60>const</FONT></B> pdbCRoutine *func() <B><FONT color=#60ff60>const</FONT></B>;
+};
+</font></PRE>
+
+<tr align=left valign=top><td>
+pdbFriendClass describes a friend class of a C++ class.
+<td BGcolor=#000000>
+<PRE><FONT color=#FFFFFF><B><FONT
+color=#60ff60>class</FONT></B> pdbFriendClass : <B><FONT color=#ffff60>public</FONT></B> pdbLoc {
+<B><FONT color=#ffff60>public</FONT></B>:
+  <B><FONT color=#60ff60>const</FONT></B> pdbClass *friendClass() <B><FONT color=#60ff60>const</FONT></B>;
+};
+</font></PRE>
+
+<tr align=left valign=top><td>
+pdbFriendFunc represents a friend function of a C++ class.
+<td BGcolor=#000000>
+<PRE><FONT color=#FFFFFF><B><FONT
+color=#60ff60>class</FONT></B> pdbFriendFunc : <B><FONT color=#ffff60>public</FONT></B> pdbLoc {
+<B><FONT color=#ffff60>public</FONT></B>:
+  <B><FONT color=#60ff60>const</FONT></B> pdbCRoutine *friendFunc() <B><FONT color=#60ff60>const</FONT></B>;
+};
+</font></PRE>
+
+<tr align=left valign=top><td>
+pdbModFunc describes a function inside a Fortran 90 module.
+<td BGcolor=#000000>
+<PRE><FONT color=#FFFFFF><B><FONT
+color=#60ff60>class</FONT></B> pdbModFunc : <B><FONT color=#ffff60>public</FONT></B> pdbLoc {
+<B><FONT color=#ffff60>public</FONT></B>:
+  <B><FONT color=#60ff60>const</FONT></B> pdbFRoutine *func() <B><FONT color=#60ff60>const</FONT></B>;
+};
+</font></PRE>
+
+</tr>
+
+<tr align=left valign=top><td>
+pdbArg is used to represent a formal argument (parameter) of a routine.
+The argument is described by its type, its name (if available), and further
+attributes.
+<td BGcolor=#000000>
+<PRE><FONT color=#FFFFFF><B><FONT
+color=#60ff60>class</FONT></B> pdbArg : <B><FONT color=#ffff60>public</FONT></B> pdbLoc {
+<B><FONT color=#ffff60>public</FONT></B>:
+  <B><FONT color=#60ff60>const</FONT></B> pdbType* type() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>const</FONT></B> string&amp; name() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>bool</FONT></B> intentIn() <B><FONT color=#60ff60>const</FONT></B>;        <B><FONT color=#80a0ff>/*</FONT></B><B><FONT color=#80a0ff>f90*/</FONT></B>
+  <B><FONT color=#60ff60>bool</FONT></B> intentOut() <B><FONT color=#60ff60>const</FONT></B>;       <B><FONT color=#80a0ff>/*</FONT></B><B><FONT color=#80a0ff>f90*/</FONT></B>
+  <B><FONT color=#60ff60>bool</FONT></B> isOptional() <B><FONT color=#60ff60>const</FONT></B>;      <B><FONT color=#80a0ff>/*</FONT></B><B><FONT color=#80a0ff>f90*/</FONT></B>
+  <B><FONT color=#60ff60>bool</FONT></B> hasDefault() <B><FONT color=#60ff60>const</FONT></B>;
+};                                              <!-- WM-->
+</font></PRE>
+</tr>
+
+</table>
+
+<p>
+
+The source code location of the last five classes describe where the
+corresponding objects are declared within a C++ class definition
+(the location of the object identifier to be precise).
+
+<p>
+
+<table border=1 width=663 cellpadding=10>
+
+<tr align=left valign=top><td>
+pdbEnum describes one element of an C / C++ enumeration type by its name
+(identifier) and the corresponding integer value.
+<td BGcolor=#000000>
+<PRE><FONT color=#FFFFFF><B><FONT
+color=#60ff60>class</FONT></B> pdbEnum {
+<B><FONT color=#ffff60>public</FONT></B>:
+  <B><FONT color=#60ff60>const</FONT></B> string&amp; id() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>int</FONT></B> val() <B><FONT color=#60ff60>const</FONT></B>;
+};
+</font></PRE>
+
+<tr align=left valign=top><td>
+pdbBounds is used to describe the bounds of one dimension of a Fortran
+array.
+<td BGcolor=#000000>
+<PRE><FONT color=#FFFFFF><B><FONT
+color=#60ff60>class</FONT></B> pdbBounds {
+<B><FONT color=#ffff60>public</FONT></B>:
+  <B><FONT color=#60ff60>int</FONT></B> lower() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>int</FONT></B> upper() <B><FONT color=#60ff60>const</FONT></B>;
+};
+</font></PRE>
+
+<tr align=left valign=top><td>
+pdbComment represents a comment in a source file. Comments are numbered
+0 to N inside one file. The kind, its exact location, and the comment
+text is available.
+<td BGcolor=#000000>
+<PRE><FONT color=#FFFFFF><B><FONT
+color=#60ff60>class</FONT></B> pdbComment {
+<B><FONT color=#ffff60>public</FONT></B>:
+  <B><FONT color=#60ff60>int</FONT></B> id() ;
+  PDB::lang_t kind() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>const</FONT></B> pdbLoc&amp; cmtBegin() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>const</FONT></B> pdbLoc&amp; cmtEnd() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>const</FONT></B> string&amp; text() <B><FONT color=#60ff60>const</FONT></B>;
+};
+</font></PRE>
+
+<tr align=left valign=top><td>
+pdbStmt are describing statements in the body of routines. Statements
+are numbered 0 to N inside one routine. The kind, the exact location,
+and the relationship with other statements are provided: the "next"
+statement, "down" pointing to the first statement in a block or a "case"
+and the "then" part of "if", finally the "extra" pointing to the "else"
+part of "if", the "break" related to a "case", the first "catch" of a "try"
+statement, and the target of "goto", "break", and "continue".
+Statements are currently only available for C and C++.
+<td BGcolor=#000000>
+<PRE><FONT color=#FFFFFF><B><FONT
+color=#60ff60>class</FONT></B> pdbStmt {
+<B><FONT color=#ffff60>public</FONT></B>:
+  <B><FONT color=#60ff60>int</FONT></B> id() <B><FONT color=#60ff60>const</FONT></B>;
+  stmt_t kind() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>const</FONT></B> pdbLoc&amp; stmtBegin() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>const</FONT></B> pdbLoc&amp; stmtEnd() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>const</FONT></B> pdbStmt* nextStmt() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>const</FONT></B> pdbStmt* downStmt() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>const</FONT></B> pdbStmt* extraStmt() <B><FONT color=#60ff60>const</FONT></B>;
+};
+</font></PRE>
+
+<tr align=left valign=top><td>
+pdbTemplateArg describes arguments in template definitions and
+specializations. Depending on the kind of the template argument,
+different methods are applicable:
+
+<p><b>types:</b> type() and defaultType()
+<br><b>non types:</b> type(), name() and defaultValue()
+<br><b>templates:</b> templateArg() and defaultTemplateArg()
+<p>
+For arguments of specializations, the following applies:
+
+<p><b>types:</b> type()
+<br><b>non types:</b> value()
+<br><b>templates:</b> templateArg()
+<td BGcolor=#000000>
+<PRE><FONT color=#FFFFFF><B><FONT
+color=#60ff60>class</FONT></B> pdbTemplateArg {
+<B><FONT color=#ffff60>public</FONT></B>:
+  targ_t kind() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>const</FONT></B> string&amp; name() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>const</FONT></B> pdbType* type() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>const</FONT></B> pdbTemplate* templateArg() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>const</FONT></B> string&amp; value() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>const</FONT></B> pdbType* defaultType() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>const</FONT></B> pdbTemplate* defaultTemplateArg() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>const</FONT></B> string&amp; defaultValue() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>bool</FONT></B> isSpecialization() <B><FONT color=#60ff60>const</FONT></B>;
+};
+</font></PRE>
+
+</tr>
+</table>
+
+
+<h2><hr>The PDB Class<hr></h2>
+
+<table border=1 width=663 cellpadding=10>
+
+<tr align=left valign=top><td>
+In addition, there is a class PDB that represents an entire PDB file. It
+provides methods to read, write, and merge PDB files, to get the version of
+the PDB file format and the programming language it got generated from.
+<p>
+There are also methods 
+to get the source file inclusion tree, the static call tree, and the class
+hierarchy.
+<p>
+It provides a list of all items contained in the PDB file as
+well as lists of all defined types, files, classes, modules, C/C++ and
+Fortran routines, templates, macros, and namespaces.
+<td BGcolor=#000000>
+<PRE><FONT color=#FFFFFF><B><FONT
+color=#60ff60>class</FONT></B> PDB {
+<B><FONT color=#ffff60>public</FONT></B>:
+  <B><FONT color=#80a0ff>// PDB basic interface</FONT></B>
+  PDB(<B><FONT color=#60ff60>char</FONT></B> *fname);
+  ~PDB();
+  <B><FONT color=#60ff60>bool</FONT></B> write(<B><FONT color=#60ff60>char</FONT></B> *fname);
+  <B><FONT color=#60ff60>void</FONT></B> write(ostream&amp; ostr);
+  <B><FONT color=#60ff60>bool</FONT></B> merge(<B><FONT color=#60ff60>char</FONT></B> *fname);
+  <B><FONT color=#ffff60>operator</FONT></B> <B><FONT color=#60ff60>void</FONT></B> *() <B><FONT color=#60ff60>const</FONT></B>;
+  <B><FONT color=#60ff60>int</FONT></B> version() <B><FONT color=#60ff60>const</FONT></B>;
+  lang_t language() <B><FONT color=#60ff60>const</FONT></B>;
+
+  <B><FONT color=#80a0ff>// PDB item hierachies</FONT></B>
+  pdbFile    *fileTree();
+  pdbRoutine *callTree();
+  pdbClass   *classTree();
+                                              
+  <B><FONT color=#80a0ff>// PDB item vectors</FONT></B>
+  itemvec&amp;      getItemVec();
+  typevec&amp;      getTypeVec();
+  filevec&amp;      getFileVec();
+  classvec&amp;     getClassVec();
+  modulevec&amp;    getModuleVec();
+  croutinevec&amp;  getCRoutineVec();
+  froutinevec&amp;  getFRoutineVec();
+  templatevec&amp;  getTemplateVec();
+  pragmavec&amp;    getPragmaVec();
+  macrovec&amp;     getMacroVec();
+  namespacevec&amp; getNamespaceVec();
+};                                              <!-- WM-->
+</font></PRE>
+
+<tr align=left valign=top><td>
+A basic template for a PDB application is shown here:
+<p>
+After initializing a PDB object with the name of the PDB file
+and checking whether the initialization was sucessful, it can be used
+to process the items described in this file. In case of errors, 
+error messages are written to std::cerr by the PDB constructor.
+<p>
+Note that by defining several PDB objects more than one PDB file can be
+processed at once.
+<td BGcolor=#000000>
+<PRE><FONT color=#FFFFFF><FONT
+color=#ff80ff>#include </FONT><FONT color=#ffa0a0>&lt;iostream&gt;</FONT>
+<FONT color=#ff80ff>#include </FONT><FONT color=#ffa0a0>&quot;pdbAll.h&quot;</FONT>
+
+<B><FONT color=#60ff60>int</FONT></B> main(<B><FONT color=#60ff60>int</FONT></B> argc, <B><FONT color=#60ff60>char</FONT></B> *argv[]) {
+  <B><FONT color=#80a0ff>// check arguments</FONT></B>
+  <B><FONT color=#ffff60>if</FONT></B> ( argc != <FONT color=#ffa0a0>2</FONT> ) {
+    std::cerr &lt;&lt; <FONT color=#ffa0a0>&quot;usage: &quot;</FONT> &lt;&lt; argv[<FONT color=#ffa0a0>0</FONT>]
+              &lt;&lt; <FONT color=#ffa0a0>&quot; pdbfile...&quot;</FONT> &lt;&lt; std::endl;
+    <B><FONT color=#ffff60>return</FONT></B> <FONT color=#ffa0a0>1</FONT>;
+  }
+
+  <B><FONT color=#80a0ff>// initialize PDB object</FONT></B>
+  PDB pdb1(argv[<FONT color=#ffa0a0>1</FONT>]);
+
+  <B><FONT color=#ffff60>if</FONT></B> ( pdb1 ) {
+    <B><FONT color=#80a0ff>// if sucessful, process PDB items here</FONT></B>
+    ...
+  }
+}
+</font></PRE>
+
+</tr>
+</table>
+
+</body>
+</html>

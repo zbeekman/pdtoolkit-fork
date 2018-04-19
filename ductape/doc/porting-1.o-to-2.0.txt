@@ -1,0 +1,75 @@
+Porting DUCTAPE 1.0 Applications to 2.0
+=======================================
+
+This document describes all changes which are necessary to port
+a DUCTAPE 1.0 application to the new 2.0 API.
+
+The main difference between version 1.0 and 2.0 is the support for
+the PDB 2.0 file format which now supports Fortran besides C and C++.
+DUCTAPE API changes were kept minimal but some were necessary to
+include Fortran support. The most visible change is in the
+DUCTAPE class hierarchy:
+
+  [1.0]                                   [2.0]
+
+  ... pdbTemplateItem                     ... pdbTemplateItem
+      \----> pdbRoutine                       \----> pdbRoutine
+      |                                       |      \----> pdbCRoutine
+      |                                       |      \----> pdbFRoutine
+      |                                       |
+      \----> pdbClass                         \----> pdbGroup
+      |                                       |      \----> pdbClass
+      |                                       |      \----> pdbModule
+      |                                       |
+      \----> pdbClassField                    \----> pdbGroupField
+      |                                       |
+      ...                                     ...
+
+The 2.0 pdbRoutine class only contains routine features common to
+Fortran and C/C++. Language specific features are captured by the
+new classes pdbCRoutine and pdbFRoutine.
+The new class pdbModule includes F90 modules and derived types. Again,
+common features between C++ classes/structs/unions and f90 modules/types
+are represented in a new base class pdbGroup (which boils down to a 
+"group" of items with access rights). pdbClassField was renamed to
+pdbGroupField to reflect the new terminology.
+
+The language of the source code from which the PDB file was generated
+can be determined with the new function "lang_t PDB::language()" which
+returns the constants LA_C, LA_CXX, or LA_FORTRAN.
+
+Other minor changes which are needed for porting DUCTAPE 1.0 applications
+to the new 2.0 API:
+
+  [1.0]                                   [2.0]
+
+  store_t, ST_xxx                         routine_t, RO_xxx
+
+  func_t, FU_xxx                          rspec_t, RS_xxx
+
+  class_t, CL_xxx                         group_t, GR_xxx
+
+  TY_CLASS                                TY_GROUP
+
+  PDB::routinevec                         PDB::croutinevec
+  PDB::routinemap                         PDB::croutinemap
+  PDB::getRoutineVec()                    PDB::getCRoutineVec()
+  PDB::getRoutineMap()                    PDB::getCRoutineMap()
+
+  pdbRoutine::storageClass()              pdbRoutine::kind()
+
+  pdbRoutine::covariant...()              pdbCRoutine::covariant...()
+              isInline()                               isInline()
+              isStatic()                               isStatic()
+              virtuality()                             virtuality()
+              isCompilerGenerated()                    isCompilerGenerated()
+              isExplicitCtor()                         isExplicitCtor()
+
+  pdbType::argumentTypes()                pdbType::arguments()
+
+  pdbClass::funcMembers()                 pdbClass::methods()
+
+  pdbItem::parentClass()                  pdbItem::parentGroup()
+
+  const pdbClass* pdbType::isClass()      const pdbGroup* pdbType::isGroup()
+

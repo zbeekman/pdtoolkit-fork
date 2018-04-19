@@ -1,0 +1,740 @@
+Program Database Toolkit (PDT)
+
+**********************************************************************
+
+Program Database (PDB) Format
+
+    Items                    ID      attribute
+			   prefix     prefix
+    HEADER
+    FILES                    so          s
+    ROUTINES                 ro          r
+    GROUPS                   gr          g
+    TYPES (non-groups)       ty          y
+    TEMPLATES                te          t
+    NAMESPACES               na          n
+    MACROS                   ma          m
+    PRAGMAS                  pr          p
+
+Prototype format for each item:
+* Each item is decribed by a block of lines
+* First line is always <id> <name>
+  where <id> consists of prefix as described aboved followed by '#'
+  followed by an unsigned (>=0) and unique number (unique inside the
+  item category). The numbering has no other constraints (especially
+  contiguous allocation or start with 0)
+* Each other line is of the form:  attribute value value...
+* Attributes and values are separated by exactly one space (" ")
+* Item description blocks are terminated by an empty line
+* Values which are references to other items are done using IDs
+* Values are never enclosed in ""
+* Attributes with boolean value are only listed if true (value == T)
+  i.e. absence means false
+* String "[...]" after attribute means "0 or more" instances of this
+  attribute line possible
+
+**********************************************************************
+
+HEADER Item
+
+<PDB X.0>                                            # magic string including
+                                                     # version (X = 1|2|3|4)
+lang		< c|c++|c_or_c++|fortran             # [optional]
+		|java|multi|upc>			     # parser language
+
+**********************************************************************
+
+SOURCE FILE Item
+
+so#[fileID]	<filename (absolute path)>
+ssys		<boolean>			     # is system include? (c/c++)
+sinc [...]	<included_fileID>		     # IDs of included files
+scom [...]      <comID> <lang> <start_loc> <end_loc> <comment_text>
+                comID = co#<i> where i = 0 .. n
+		start_loc = <fileID> <line> <column> |  NULL 0 0
+		end_loc = <fileID> <line> <column> | NULL 0 0
+                                                     # comment descriptor
+                                                     # one for each comment
+                                                     # in the file [optional]
+
+**********************************************************************
+
+ROUTINE Item
+
+ro#[routineID]  <name_of_routine>
+rloc		<fileID> <line> <column>	     # location
+[
+rgroup		<groupID>			     # parent group
+racs		<pub|prot|priv>			     # access
+  OR
+rnspace		<namespaceID>			     # parent namespace (c++)
+  OR
+rroutine	<routineID>			     # parent routine (f90)
+racs		<pub|priv>			     # access (f90)
+  OR
+racs		<pub|priv>			     # access for interfaces (f90)
+]
+ralias		<routineID>			     # alias (via interface) (f90)
+rsig		<typeID>                             # signature
+rlink		<no|internal|C++|C|fint|f90>         # linkage
+rkind		<ext|stat|auto|NA|asm|tproto	     # storage class
+		|fext|fprog|fbldat|fintrin	     # (f90)
+		|fint|fstfn|fmproc|funspec	     # (f90)
+		|falias>			     # (f90)
+rimpl [...]	<routineID>			     # for "rkind falias" (f90)
+rstatic		<boolean>			     # is static function? (c/c++)
+rskind		<ctor|dtor|conv|op>		     # special kind
+rvirt		<no|virt|pure>                       # virtuality (c++)
+rcrvo		<boolean>                            # is covariant return
+						     # virtual override? (c++)
+rinline		<boolean>			     # is inline? (c/c++)
+rcgen		<boolean>                            # is compiler generated? (c++)
+rexpl		<boolean>                            # is explicit ctor? (c++)
+rtempl		<templateID>			     # ID if template instance; (c++)
+rspecl		<boolean>                            # is specialized? (c++)
+rarginfo	<boolean>			     # explicit interface defined? (f90)
+rrec		<boolean>			     # is declared recursive? (f90)
+riselem		<boolean>			     # is elemental? (f90)
+rstart		<fileID> <line> <column>	     # location of first
+						     # executable statement (c/f90)
+rcall [...]	<routineID> <no|virt> <fileID> <line> <column>
+						     # callees
+rret [...] 	<fileID> <line> <column>	     # location of return (f90)
+rstop [...]	<fileID> <line> <column>	     # location of stop (f90)
+
+rpos		<start_of_return_type> <last_token_before_"{"> <"{"> <"}">
+
+rstmt [...]   	<id> <kind> <start_loc> <end_loc> <next_st> <down> [<extra>] [<upc_extra>]
+		where id = st#<no>
+		kind = <switch|case|init|return|if|empty|for|goto|continue|
+			break|label|block|asm|expr|assign|throw|while|do|
+                        try|catch|decl|set_vla_size|vla_decl|vla_dealloc|
+
+			# fortran only
+
+			fallocate|fassign|fio|fdo|fdeallocate|freturn|fif|
+			fsingle_if|fgoto|fstop|flabel|fexit|fcycle|farithif|
+      fentry|fpause|flabelassign|fpointerassign|fselect|
+      fcase|fwhere|fforall|fcall|fsingle_if|fwait|flock|
+      funlock|fsync_all|fsync_memory|fsync_images|
+      fselect_type|fblock|fcall_ppc|fassign_call|fcompcall|
+      ferror_stop|fend_block|fflush
+            # UPC only
+            upc_forall|upc_barrier|upc_fence|upc_notify|upc_wait
+			>
+		start_loc = <fileID> <line> <column> |  NULL 0 0
+		end_loc = <fileID> <line> <column> | NULL 0 0
+		next_st = st#<id>  | NA
+		down    = st#<id> | NA
+		extra   = <for_init | else_stmt | catch_stmt |
+		           target_stmt | break_stmt | goto_target | for_stmt>
+   		for_init = st#<id> | NA  (associated with for)
+		else_stmt = st#<id> | NA  (associated with if, fwhere)
+		catch_stmt = st#<id> | NA (associated with try)
+		target_stmt = st#<id> | NA (associated with goto, break, continue)
+		break_stmt = st#<id> | NA (associated with case)
+
+        upc_extra = <upc_forall_affinity_stmt>
+        upc_forall_affinity_stmt = st#<id> | NA (associated with upc_forall) 
+
+		# goto_targets are the flabel statement associated with a fortran goto
+		goto_target = st#<id> | NA (associated with fgoto)
+
+		# fexit and fcycle statements <extra> stmt points to the associated loop
+		for_stmt = st#<id> | NA (associated with fexit, fcycle)
+		
+		
+
+rbody [...]     <statement_block>
+		where statement_block = st#<id>       # entry point 
+
+**********************************************************************
+
+GROUP Item
+
+gr#[groupID] 	<name_of_group>
+gloc		<fileID> <line> <column>	     # location
+[
+ggroup		<groupID>			     # parent group
+gacs		<pub|prot|priv>			     # access
+  OR
+gnspace		<namespaceID>			     # parent namespace (c++)
+]
+gkind		<class|struct|union|tproto	     # kind
+		|fderived|fmodule>		     # (f90)
+gtempl		<templateID>			     # template ID (c++)
+gspecl		<boolean>                            # is specialized? (c++)
+gsparam [...]	<type> <typeID|groupID>		     # specialization (c++)
+		OR <ntype> <constant>		     # template arguments
+		OR <templ> <templateID>
+gbase [...]	<virt|no> <NA|pub|prot|priv> <direct base groupID>
+		  <fileID> <line> <column>
+						     # direct base groups (c++)
+gfrgroup [...]  <groupID> <fileID> <line> <column>   # friend groups (c++)
+gfrfunc [...]	<routineID> <fileID> <line> <column> # friend functions (c++)
+gfunc [...]	<member_routineID> <fileID> <line> <column>
+						     # member functions
+gmem [...]	<name_of_non-function_member>	     # other members
+  gmloc		<fileID> <line> <column>	     # location
+  gmgroup	<groupID>			     # parent group (f90) 
+  gmacs		<pub|prot|priv>			     # access
+  gmkind	<type|statvar|var|templ>	     # kind:  type or group,
+						     # static or non-static
+						     # variable, template
+  [
+  if (gmkind == type):
+  gmtype	<typeID|groupID>		     # type of member
+
+  if (gmkind == statvar):
+  gmtype	<typeID|groupID>		     # type of member
+  gmtempl	<templateID>			     # ID if template static (c++)
+						     # data member
+  gmspecl	<boolean>			     # is specialized? (c++)
+  gmconst	<boolean>			     # was initializer
+						     # specified at its
+						     # declaration within the
+						     # group definition? (c++)
+
+  if (gmkind == var):
+  gmtype	<typeID|groupID>		     # type of member
+  gmisbit	<boolean>                            # is bit field?
+  gmmut		<boolean>			     # is mutable? (c++)
+  gmconst	<boolean>			     # is constant? (f90)
+
+  if (gmkind == templ):
+  gmtempl	<templateID>			     # template ID (c++)
+  ]
+gpos		<group_token> <last_token_before_"{"> <"{"> <"};">
+
+**********************************************************************
+
+TYPE Item
+
+ty#[typeID]	<name_of_type>
+yloc		<fileID> <line> <column>	     # location
+[
+ygroup		<groupID>			     # parent group
+yacs		<pub|prot|priv>			     # access
+  OR
+ynspace		<namespaceID>			     # parent namespace (c++)
+  OR
+yacs		<pub|priv>			     # access (f90)
+]
+ykind		<err|void|int|float|ptr|ref|func     # kind
+		|array|tref|ptrmem|tparam
+		|enum|wchar|bool
+		|ferr|fvoid|fint|flogic|ffloat	     # (f90)
+		|ffunc|fchar|farray|fcmplx	     # (f90)
+		|funspecfunc|fbldat|fmod|fptr	     # (f90)
+		|NA
+
+[
+if (ykind == int|enum|wchar|bool|fint|flogic|fchar):
+yikind		<char|schar|uchar|wchar		     # integer kind
+		|short|ushort|int|uint
+		|long|ulong|longlong|ulonglong>
+ysigned		<boolean>			     # is explicitly signed?
+
+if (ykind == enum):
+yenum [...]	<name1> <value1>                     # name-value pairs
+
+if (ykind == fchar):				     # (f90)
+yclen		<number_of_characters>		     # *: unspecified
+						     # else constant
+
+if (ykind == float|ffloat|fcmplx):
+yfkind		<float|dbl|longdbl>		     # float kind
+
+if (ykind == ptr|fptr):
+yptr		<typeID|groupID>		     # type pointed to
+
+if (ykind == ref):
+yref		<typeID|groupID>		     # type referred to
+
+if (ykind == func|ffunc):
+yrett		<typeID|groupID>		     # return type
+yargt [...]	<typeID|groupID> <-|name> <src> <def|in|out|opt>*
+		where src = NA 0 0 | so#<id> <line> <col>
+		where the position represents the beginning of type 
+						     # argument type
+						     # argument name
+						     # has default value?
+						     # intent in? (f90)
+						     # intent out? (f90)
+						     # is optional? (f90)
+yellip          <boolean>			     # has ellipsis?
+yqual		<const>				     # qualifier
+yexcep [...]	<typeID|groupID>		     # absence of attribute
+						     # indicates any exception
+						     # may be thrown;
+						     # NULL indicates no excep-
+						     # tions will be thrown
+
+if (ykind == array):
+yelem		<typeID|groupID>		     # type of array element
+ystat		<boolean>			     # (C99) is static?  i.e.,
+						     # is array tagged with C99
+						     # keyword "static"?
+ynelem		<number_of_elements>		     # -2: template dependent size array;
+						     # -1: variable length array;
+						     # 0: [] incomplete-type case;
+						     # else number of elements
+
+if (ykind == farray):				     # (f90)
+yelem		<typeID|groupID>		     # type of array element
+yshape		<explicit|asmdsize|asmdshape	     # shape of array
+		|deferred>
+yrank		<number_of_dimensions>		     # number of dimensions
+ydim [...]	<lower_bound> <upper_bound>	     # bounds of dimensions
+						     # *: if upper bound for asmdsize;
+						     # NA: if not constant;
+						     # else constant value
+
+if (ykind == tref):
+ytref		<typeID|groupID>		     # typedef type
+yqual		<const|volatile|restrict>*	     # qualifiers
+yshared     <boolean>        # (UPC) is shared?
+yblocksize  <block_size>     # (UPC) block size of shared variable
+                             # -1: Not constant
+                             # * : Contiguous
+                             # else constant value
+yrelaxed    <boolean>        # (UPC) is relaxed?
+ystrict     <boolean>        # (UPC) is strict?
+
+if (ykind == ptrmem):
+ympgroup  	<groupID>			     # type of group to which
+						     # member pointed to belongs
+ymptype		<typeID|groupID>		     # type of member pointed to
+]
+
+**********************************************************************
+
+TEMPLATE Item (c++ only)
+
+te#[templateID] <name_of_template>
+tloc		<fileID> <line> <column>	     # location
+[
+tgroup          <groupID>			     # parent group
+tacs            <pub|prot|priv>			     # access
+  OR
+tnspace		<namespaceID>			     # parent namespace
+]
+tdecl		<templateID>			     # declaration of template,
+						     # if not current template
+tdef		<templateID>			     # definition of template,
+						     # if not current template
+tkind		<none|class|func|memfunc	     # kind
+		|statmem|memclass|ttparam>
+tparam [...]	<type> <typeID> <default typeID|groupID, if any>
+		OR <ntype> <typeID> <-|name> <default value, if any>
+		OR <templ> <templateID> <default templateID, if any>
+						     # template parameters
+tsparam [...]	<type> <typeID|groupID>		     # partial specialization
+		OR <ntype> <constant>		     # template parameters
+		OR <templ> <templateID>
+
+if (ykind == func|memfunc):
+tproto		<routineID>			     # prototype instantiation
+
+if (ykind == class|memclass):
+tproto		<groupID>			     # prototype instantiation
+
+if (ykind == statmem):
+ttype		<typeID|groupID>		     # variable type
+
+ttext		<string_giving_text_of_template>     # text of template
+tpos		<template_token> <">"> <start_of_template> <"}">
+
+**********************************************************************
+
+NAMESPACE Item (c++ only)
+
+na#[namespaceID]	<name_of_namespace>
+nloc		<fileID> <line> <column>	     # location
+nnspace		<parent_namespaceID>		     # parent namespace
+nmem [...]	<typeID|routineID|groupID	     # IDs of members
+		|templateID|namespaceID>
+nalias		<alias_name>			     # alias of namespace
+npos		<namespace_token> <last_token_before_"{"> <"{"> <"}">
+
+**********************************************************************
+
+MACRO Item
+
+ma#[macroID] 	<name_of_macro>
+mloc		<fileID> <line> <column>	     # location
+mkind		<def|undef>			     # kind
+mtext		<string_giving_text_of_macro>	     # text of macro
+
+**********************************************************************
+
+PRAGMA Item
+
+pr#[pragmaID] <name_of_pragma>
+ploc		<fileID> <line> <column>	     # location
+pkind		<first-word-after-name>              # kind [optional]
+ppos		<start_loc> <end_loc>
+ptext		<string_giving_text_of_pragma>	     # text of pragma
+
+**********************************************************************
+
+NOTES AND CAVEATS:
+
+To eliminate unneeded (C++) entities, add the EDG option 
+"--remove_unneeded_entities" to the cxxparse command line. 
+
+ROUTINE rpos, GROUP gpos, TEMPLATE tpos, NAMESPACE npos:
+* Positions have form <fileID> <line> <column>
+* Position 1 corresponds to the first 3 values, position 2 to the
+  next 3 values, etc.
+* Location of the header is given by the first 2 positions, location
+  of the body by the last 2 positions.
+* A value of "NULL 0 0" indicates an unknown position.
+* Tab characters are counted as a single column.
+
+ROUTINE rcall:
+* The values for rcall will be NULL 0 0, if the routine calling (e.g. some
+  constructors) or being called (e.g. implicit conversions) is compiler
+  generated.
+* Some positions are not ideal (but the best that can be done):
+  ctor/dtor calls associated with "new"/"delete", 
+  dtor calls within dtors for derived classes,
+  new/ctor calls associated with return statements,
+  positions associated with macros.
+* Destructor calls are often reported with the corresponding constructor
+  calls; this is for exception handling.
+
+ROUTINE rpos:
+* For unused member functions of instantiated template classes, the
+  header positions are known, but not the body positions.
+* For unused constructors of instantiated template classes, position 2
+  will not reflect the constructor initializers.
+* Fortran 90: only first position is available in IL.
+
+ROUTINE:
+Fortran 90 ENTRY statement is not handled.
+
+GROUP gpos:
+* C++: If position 2 is null, then the class is a typedef having the form:
+    typedef struct { . . . };
+* C++: Position 3 cannot be determined for non-template classes and speciali-
+  zations; it is not given in the IL.
+* C++: In cases where positions 3 and 4 are null -- i.e. the class corresponds
+  to a template declaration rather than a definition -- position 2 will not
+  reflect base classes, if there are any.  This is the best that
+  can be done given the structure of the IL.
+* Fortran 90: No positions are available in IL.
+
+TEMPLATE tspecl:
+* For a specialized class template, it would be nice to know
+  the class template that it is a specialization of, i.e.
+  a "tspecl te#xx" attribute would be nice.
+  (The IL does not provide needed information.)
+
+TEMPLATE tpos:
+* Position 2 is unknown in IL.
+* For tkind ttparam, only position 1 is known.
+* For tkind memfunc and statmem, only positions 3 and 4 are known
+  for definitions, whereas no positions are known for declarations.
+
+NAMESPACE npos:
+* The positions for a namespace pertain to the first encountered segment
+  of a namespace.
+* Position 1 is unknown in IL.
+* Position 2 is known in IL only for named namespaces.
+* Position 3 is known in IL only for unnamed namespaces.
+* Position 4 is unknown in IL for namespace aliases.
+
+IL Analyzer (bin/taucpdisp):
+* Routine calls using pointers to functions are not currently reported.
+  The function signature can be determined without difficulty; what else can
+  be determined is not known at this time.  See emails on "C++ function calls"
+  from Kathie and Bernd, and ptrToFunc.c example. (1/20/00)
+ 
+DUCTAPE application bin/pdbmerge:
+* Namespace definitions spread over several files are not merged correctly.
+
+DUCTAPE application bin/pdbtree:
+* Class hierarchy is a DAG, not a tree, and therefore display is bad.
+
+Possible enhancements:
+* Full symbol information
+  * type
+  * location where defined
+  * locations where used
+
+**********************************************************************
+
+CHANGE LOG:
+
+************************************
+
+Change date: September 21, 2000, klindlan
+
+ALL:
+group[ID] (renamed from "class[ID]")
+
+ROUTINE:
+rgroup (renamed from "rclass")
+(rroutine + racs) OR racs (added for f90)
+ralias (added for f90)
+rlink ("fint", "f90" values added for f90)
+rkind (renamed from "rstore", values added for f90)
+rimpl (added for f90)
+rskind (renamed from "rkind")
+rstart (added for f90)
+rreturn (added for f90)
+rstop (added for f90)
+rpos (only first position is available in IL for f90)
+
+GROUP (previously known as CLASS):
+all attributes ('cl' -> 'gr', 'c' -> 'g')
+ggroup (renamed from "cclass")
+gkind ("fderived", "fmodule" values added for f90)
+gfrgroup (renamed from "cfrclass")
+under gmem:
+  gmgroup (added for f90; needed to handle "USE" within module)
+  if (gmkind == var):
+    gmconst (added for f90)
+gpos (no positions are available in IL for f90)
+
+TYPE:
+ygroup (renamed from "yclass")
+yacs (occurrence without "ygroup" added for f90)
+ykind (values added for f90)
+if (ykind == fint|flogic|fchar):
+  yikind ("wchar" value added for f90)
+if (ykind == fchar):
+  yclen (added for f90)
+if (ykind == ffloat|fcmplx):
+  (added for f90)
+if (ykind == fptr):
+  (added for f90)
+if (ykind == func|ffunc):
+  ("ffunc" added for f90)
+  yarginfo, yrec, yiselem (added for f90)
+  yargt ("name" value added; "in," "out," "opt" values added for f90; 
+  boolean converted to "def")
+if (ykind == farray):
+  yelem, yshape, yrank, ydim (added for f90)
+if (ykind == ptrmem):
+  ympgroup (renamed from "ympclass")
+
+TEMPLATE:
+tgroup (renamed from "tclass")
+
+NOTES AND CAVEATS:
+ROUTINE rpos, GROUP gpos (added comments for f90)
+Fortran 90 ENTRY statement is not handled
+
+CHANGE LOG:
+Old entries deleted
+
+************************************
+
+Change date: March 13, 2001, klindlan
+
+OTHER:
+Updated C++ IL Analyzer to reflect changes for CLASS->GROUP
+Deleted various out-of-date comments
+
+SOURCE FILE:
+ssys (added for C++)
+
+ROUTINE:
+rimpl (added "[...]")
+rtempl (values include templateID and boolean)
+rtarg (added for C++)
+rarginfo, rrec, riselem (added for f90)
+rret (name changed from "rreturn", added for C++)
+
+GROUP:
+gtempl (values include templateID and boolean)
+gtarg (added for C++)
+gsarg (added for C++)
+gfunc (corrected so that location is displayed)
+gmem gmkind (added "templ" value)
+if (gmkind == templ):
+  gmtempl (added for C++)
+
+TYPE:
+if (ykind == enum):
+  yenum (changed format to hex without leading 0s)
+if (ykind == func|ffunc):
+  yargt (added "-" in case an argument name is not given)
+  yarginfo, yrec, yiselem (deleted for f90)
+if (ykind == array);
+  ynelem (value is "-2" for template dependent size array)
+
+TEMPLATE:
+tkind (added value "ttparam" for template template parameters)
+tparam, tproto, ttype (added for C++)
+
+************************************
+
+Change date: March 23, 2001, klindlan
+
+ROUTINE:
+rkind (added tproto for C++)
+rtempl (deleted boolean)
+rtarg (deleted)
+
+GROUP:
+gkind (added tproto for C++)
+gtempl (deleted boolean)
+gtarg (deleted)
+gsparam (renamed from gsarg)
+
+TEMPLATE:
+tparam (defaults are now optional IDs or values)
+
+************************************
+
+Change date: May 16, 2001, klindlan
+
+Integrated PDT with EDG v. 2.45
+
+ROUTINE:
+rcatch (added)
+rpos (accommodates EDG changes in handling of templates/instantiations
+  and exceptions)
+
+GROUP:
+gtempl (reports definition template, if possible)
+gsparam (modified ntype value)
+gpos (reports location of definition template, when appropriate)
+
+TYPE:
+if (ykind == array):
+  ystat (added for C99)
+
+TEMPLATE:
+tdecl (added)
+tdef (added)
+tsparam (added)
+tpos (not complete)
+
+************************************
+
+Change date: June 6, 2001, klindlan
+
+TEMPLATE:
+tloc (modified)
+tpos (completed implementation, added notes)
+
+************************************
+
+Change date: July 6, 2001, klindlan
+
+ROUTINE:
+rcatch (deleted)
+
+GROUP:
+gmem (extraneous template entries are no longer reported)
+
+TYPE:
+yqual (fixed so that qualifiers are reported for functions)
+
+************************************
+
+Change date: September 25, 2001, klindlan
+
+Deleted out-of-date notes, caveats, issues. 
+
+************************************
+
+Issues List:
+
+* CHECK attribute names -- for F90-related changes (class -> group, etc.)
+
+* "use" hierarchy is not reported explicitly.
+
+* With modules, routines can be represented by two PDB entries, one for an
+  internal routine, the other for a module procedure.  The only connection
+  between the two is "rloc" entries having the same location.
+
+* Items from a module accessed via "USE" are not listed under the corresponding
+  group entry.  The IL does not list members of such a module.
+
+* (Kathie, 2/16/01)  Could not find use of "tpck_template_ref" with test cases 
+  pdtoolkit-IRIX64/test/template/t*.cc.  Will have to check for these when
+  testing with POOMA, etc.  (Look for "a_template_arg" in il_def.h.)
+
+* (KL, 3/21/01) Check output for yenum on all architectures.
+  INTEGER_VALUE_REPR_IS_A_HOST_INTEGER is 1 on all architectures  (?)
+  LINUX at least does not work properly: it reports
+  "Internal error: check_target_config: an_integer_value is too small"
+  If value is set to 0, then output for yenum is, e.g., "0x0x00000000000a."
+
+* (KL, 4/19/01) Added another filter to disp_class_type_scope() so that template
+  instantiations are not reported as class members.
+    if ((type_ptr->kind == tk_array
+	 || type_ptr->kind == tk_class
+	 || type_ptr->kind == tk_union)
+	&& type_ptr->variant.class_struct_union.is_template_class)
+      continue;
+  Make sure this is right.
+
+************************************************************
+
+(Bernd, 1/29/01 and 1/30/01)
+
+For the following:
+
+subroutine bar()
+  print *, "bar"
+end subroutine bar 
+
+program xx   
+  interface foo
+    subroutine bar()
+    end subroutine bar 
+  end interface     
+
+  call foo()
+end program xx   
+
+As I understand it rimpl/ralias comes as a pair. If ro#1
+has ralias#2 then ro#2 has rimpl#1. It actually works for your intv*.f90
+test cases. But in my xx.f90 test case I sent you, only "rimpl" shows up,
+but not "ralias". One difference I noted is that in the intv.f90 test case
+the interfaces are within a module, in my test case it is not.
+
+kal -- I investigated -- and couldn't see the connection in the IL -- except at
+a routine call.  Looks like something is wrong with the IL.
+
+*************
+
+Change date: July 3, 2003, Bernd, Sameer
+
+* Added new "pragma" item describing C/C++ pragmas and Fortran directives
+
+* Added new "scom" attributes which describes comments in files
+
+* Added "rstmt" which describes statements (only C/C++ for now)
+  If "rstmt" is available, "rret", "rstop", "rstart" should not
+  be specified.
+
+  Open Issues:
+  - end location of declaration statement point not to ';'
+    but end of last token in declaration
+  - declarations inside the "if" and "while" control expression are
+    not shown
+
+* added location information to function parameters (yargt)
+
+****************************************************************
+
+Change date: July 19, 2011, nchaimov
+
+* Added UPC (Unified Parallel C) support:
+
+  * Added "upc" as a possible setting for lang
+
+  * Added new rstmt kinds: "upc_forall", "upc_barrier", "upc_fence", "upc_notify", "upc_wait"
+
+  * For "upc_forall", an additional field can be present after 'extra' which indicates
+    which statement represents the affinity field of the forall statement.
+
+  * Added new "yshared", "yblocksize", "yrelaxed", "ystrict" attributes which describe
+    UPC-specific type attributes. These are used in types of kind "tref".
