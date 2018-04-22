@@ -14,8 +14,24 @@ PDB=pdtfilenotspecified
 if [ "x$TMPDIR" = "x" ]; then
   TMP="/tmp"
 else
-  TMP=${TMPDIR}
+  TMP="${TMPDIR}"
 fi
+
+# If user set PDT_MOD_DIR create and use gfparse48 subdir if
+# not already specified by the user
+user_set_PDT_MOD_DIR=true
+OLD_PDT_MOD_DIR="${PDT_MOD_DIR}"
+if [ "x$PDT_MOD_DIR" = "x" ]; then
+  PDT_MOD_DIR="${TMP%/}/pdt-${USER}/gfparse48/"
+  export PDT_MOD_DIR
+  user_set_PDT_MOD_DIR=false
+elif [ ! "$(basename "${PDT_MOD_DIR}")" = 'gfparse48' ]; then
+  PDT_MOD_DIR="${PDT_MOD_DIR%/}/gfparse48/"
+  export PDT_MOD_DIR
+fi
+
+# Ensure the parser tmp dir for .mod files exists
+mkdir -p "${PDT_MOD_DIR%/}" || echo "Could not make ${PDT_MOD_DIR} folder"
 
 # Creation of exclude.txt to exclude modules that haven't been compiler by gfortran 4.8
 declare -a EXCLUDELIST=() #("mpi" "iso_c_binding")
@@ -188,16 +204,26 @@ else
 fi
 
 # If gfparse can't produce a valid PDB file, invoke gfparse. This happens when
-# it produces a file with two lines <PDB 3.0> and language fortran. 
-if [ -r ${PDB} ]; then 
-  wordcount=`wc -c ${PDB} | awk '{print $1;}'` 
+# it produces a file with two lines <PDB 3.0> and language fortran.
+if [ -r "${PDB}" ]; then
+  bytecount=`wc -c "${PDB}" | awk '{print $1;}'`
+  linecount=`wc -l "${PDB}" | awk '{print $1;}'`
 else
-  wordcount=0
-fi 
+  bytecount=0
+fi
 
-if [ $wordcount -eq 23  -o $wordcount -eq 0 ]; then
+# Restore user set PDT_MOD_DIR if present
+if [ "${user_set_PDT_MOD_DIR}" = true ] ; then
+  export PDT_MOD_DIR="${OLD_PDT_MOD_DIR}"
+else
+  export PDT_MOD_DIR=""
+  unset PDT_MOD_DIR
+fi
+unset user_set_PDT_MOD_DIR
+
+if [ "$bytecount" -eq 23 ] || [ "$bytecount" -eq 0 ] || [ "$linecount" -lt 3 ]; then
   echo "Error ${PDB}: Invoking gfparse $*"
-  ${BINDIR}/gfparse $* 
+  ${BINDIR}/gfparse "$@"
 fi
 
 # CLEANUP
