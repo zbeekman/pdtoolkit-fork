@@ -1,4 +1,5 @@
 #!/bin/sh 
+# shellcheck disable=SC2006
 
 BINDIR=.
 PDTDIR=.
@@ -36,13 +37,13 @@ GFORTRAN="PATH=${BINDIR}/pdt_gfortran:$PATH gfortran"
 
 PDTOPT=""
 if [ $# = 0 ] ; then
-  echo "Usage: `basename $0` [-v] [-o<file>] [files]" 1>&2
+  echo "Usage: `basename "$0"` [-v] [-o<file>] [files]" 1>&2
   exit 1
 fi
 
 if [ ! -f ${BINDIR}/pdt_gfortran/gfortran ] ; then
   echo "gfparse invoking f95parse ..."
-  ${BINDIR}/f95parse $* -v
+  ${BINDIR}/f95parse "$@" -v
   exit
 fi
 
@@ -111,29 +112,29 @@ done
 # the name of the first source file
 #
 
-if [ $PDB = pdtfilenotspecified ] ; then
+if [ "$PDB" = pdtfilenotspecified ] ; then
   case ${INF} in
-    *.f)	PDB=`basename ${INF} .f`.pdb
+    *.f)	PDB=`basename "${INF}" .f`.pdb
 	;;
-    *.F)	PDB=`basename ${INF} .F`.pdb
+    *.F)	PDB=`basename "${INF}" .F`.pdb
 	;;
-    *.F90)	PDB=`basename ${INF} .F90`.pdb
+    *.F90)	PDB=`basename "${INF}" .F90`.pdb
 	;;
-    *.f90)	PDB=`basename ${INF} .f90`.pdb
+    *.f90)	PDB=`basename "${INF}" .f90`.pdb
 	;;
-    *.f95)	PDB=`basename ${INF} .f95`.pdb
+    *.f95)	PDB=`basename "${INF}" .f95`.pdb
 	;;
     *)	PDB=${INF}.pdb
 	;;
   esac
 fi
 
-if [ ! -r ${INF} ]; then
+if [ ! -r "${INF}" ]; then
   echo "PDT: ${INF} not readable"
   exit 1
 fi
 
-if [ ${PDB} = ".pdb" ] ; then
+if [ "${PDB}" = ".pdb" ] ; then
   echo "ERROR: Source file not specified."
   echo "PDT accepts upto three letter suffixes in file names (e.g. foo.f90)"
   exit 1
@@ -146,23 +147,22 @@ GF_ARGS="-c -o /dev/null -fdump-parse-tree -ffree-line-length-none"
 #
 
 export GFORTRAN_PDB_FILENAME="pdtgf$$.pdb"
-mkdir -p /tmp/pdt-${USER}
+mkdir -p "/tmp/pdt-${USER}"
 if [ $VERBOSE = on ] ; then
     # print the output of the pdtflint command
     echo "	gfortran ${SPAWNARGS} --> ${PDB}"
     echo "Executing ${GFORTRAN} ${GF_ARGS} ${ARCHOPT} ${SPAWNARGS} ${LOCOPT} ${EDGOPT}"
     rm -f $GFORTRAN_PDB_FILENAME
     eval ${GFORTRAN} ${GF_ARGS} ${ARCHOPT} ${SPAWNARGS} ${LOCOPT} ${EDGOPT}
-    mv $GFORTRAN_PDB_FILENAME ${PDB}
+    mv "$GFORTRAN_PDB_FILENAME" "${PDB}"
 else
     # disable printing of stdout/stderr unless there is an error
     rm -f $GFORTRAN_PDB_FILENAME
     eval ${GFORTRAN} ${GF_ARGS} ${ARCHOPT} ${SPAWNARGS} ${LOCOPT} ${EDGOPT} 1> /dev/null 2>&1
-    mv $GFORTRAN_PDB_FILENAME ${PDB}
-    if [ $? != 0 ] ; then
+    if ! mv "$GFORTRAN_PDB_FILENAME" "${PDB}" ; then
 	rm -f $GFORTRAN_PDB_FILENAME
 	eval ${GFORTRAN} ${GF_ARGS} ${ARCHOPT} ${SPAWNARGS} ${LOCOPT} ${EDGOPT}
-	mv $GFORTRAN_PDB_FILENAME ${PDB}
+	mv "$GFORTRAN_PDB_FILENAME" "${PDB}"
     fi
 fi
 
@@ -175,7 +175,7 @@ else
 fi
 unset user_set_PDT_MOD_DIR
 
-if [ ! -f ${PDB} -a -x ${BINDIR}/gfparse48 -a -x ${BINDIR}/pdt_gfortran48/gfortran ]
+if [ ! -f "${PDB}" ] && [ -x "${BINDIR}/gfparse48" ] && [ -x "${BINDIR}/pdt_gfortran48/gfortran" ]
 then
   if [ "$f90_parser_fallback" = true ]; then
     echo "PDT: Error: Couldn't create ${PDB}: Invoking the alternate PDT parser based on gfortran 4.8.5"
