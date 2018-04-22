@@ -55,6 +55,7 @@ LOCOPT=" "
 
 flintform="false"
 preprocess="no"
+f90_parser_fallback="true"
 
 for allargs in "$@" ; do
     arg=`echo "x$allargs" | sed -e 's/^x//' -e 's/"/\\\"/g' -e s,\',%@%\',g -e 's/%@%/\\\/g' -e 's/ /\\\ /g'`
@@ -76,6 +77,10 @@ for allargs in "$@" ; do
 	    testarg=${arg#-o}
 	    if [ "y$testarg" != "y$arg" ] ; then
 		PDB=$testarg
+	    fi
+
+	    if [ "y$arg" = "y-no-f90-parser-fallback" ] ; then
+		f90_parser_fallback="false"
 	    fi
 
 	    if [ "y$arg" = "y-R" ] ; then
@@ -172,19 +177,26 @@ unset user_set_PDT_MOD_DIR
 
 if [ ! -f ${PDB} -a -x ${BINDIR}/gfparse48 -a -x ${BINDIR}/pdt_gfortran48/gfortran ]
 then
-  echo "PDT: Error: Couldn't create ${PDB}: Invoking the alternate PDT parser based on gfortran 4.8.5"
-  echo ${BINDIR}/gfparse48 $*
-  ${BINDIR}/gfparse48 $*
-  ret=$?
+  if [ "$f90_parser_fallback" = true ]; then
+    echo "PDT: Error: Couldn't create ${PDB}: Invoking the alternate PDT parser based on gfortran 4.8.5"
+    echo "${BINDIR}/gfparse48 $*"
+    ${BINDIR}/gfparse48 "$@"
+  else
+    echo "PDT: Error: Couldn't create ${PDB}: Not invoking fallback parsers since PDT F90parser was explicitly specified to TAU."
+  fi
 fi
 
 
 
 # If gfparse can't produce a valid PDB file, invoke f95parse. This happens when
-# it produces a file with two lines <PDB 3.0> and language fortran. 
+# it produces a file with two lines <PDB 3.0> and language fortran.
 if [ `wc -c ${PDB} | awk '{print $1;}'` -eq 23 ]; then
-  echo "Error ${PDB}: Invoking f95parse $*"
-  ${BINDIR}/f95parse $* 
+  if [ "y$f90_parser_fallback" = "ytrue" ]; then
+    echo "Error ${PDB}: Invoking f95parse $*"
+    ${BINDIR}/f95parse "$@"
+  else
+    echo "Error ${PDB}: Not invoking fallback parsers since PDT F90parser was explicitly specified to TAU."
+  fi
 fi
 
 
