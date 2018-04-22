@@ -14,13 +14,21 @@ else
   TMP="${TMPDIR}"
 fi
 
+# If user set PDT_MOD_DIR create and use gfparse subdir if
+# not already specified by the user
+user_set_PDT_MOD_DIR=true
+OLD_PDT_MOD_DIR="${PDT_MOD_DIR}"
 if [ "x$PDT_MOD_DIR" = "x" ]; then
-  GFPARSE_MOD_DIR="${TMP}/PDT-GFPARSE/pdt-${USER}"
-else
-  GFPARSE_MOD_DIR="${PDT_MOD_DIR}"
+  PDT_MOD_DIR="${TMP%/}/pdt-${USER}/gfparse/"
+  export PDT_MOD_DIR
+  user_set_PDT_MOD_DIR=false
+elif [ ! "$(basename "${PDT_MOD_DIR}")" = "gfparse" ] ; then
+  PDT_MOD_DIR="${PDT_MOD_DIR%/}/gfparse/"
+  export PDT_MOD_DIR
 fi
 
-mkdir -p "${GFPARSE_MOD_DIR}"
+# Ensure the parser tmp dir for .mod files exists
+mkdir -p "${PDT_MOD_DIR%/}" || echo "Could not make ${PDT_MOD_DIR} folder"
 
 # place it at the start of the path so that cc1/gfortran/f951 from PDT are used
 GFORTRAN="PATH=${BINDIR}/pdt_gfortran:$PATH gfortran"
@@ -127,7 +135,7 @@ if [ ${PDB} = ".pdb" ] ; then
 fi
 
 
-GF_ARGS="-c -o /dev/null -fdump-parse-tree -ffree-line-length-none -J${GFPARSE_MOD_DIR} -I${GFPARSE_MOD_DIR}"
+GF_ARGS="-c -o /dev/null -fdump-parse-tree -ffree-line-length-none"
 #
 # run the gfortran parser
 #
@@ -153,6 +161,14 @@ else
     fi
 fi
 
+# Restore user set PDT_MOD_DIR if present
+if [ "${user_set_PDT_MOD_DIR}" = true ] ; then
+  export PDT_MOD_DIR="${OLD_PDT_MOD_DIR}"
+else
+  export PDT_MOD_DIR=""
+  unset PDT_MOD_DIR
+fi
+unset user_set_PDT_MOD_DIR
 
 if [ ! -f ${PDB} -a -x ${BINDIR}/gfparse48 -a -x ${BINDIR}/pdt_gfortran48/gfortran ]
 then
