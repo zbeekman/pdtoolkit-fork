@@ -70,6 +70,7 @@ LOCOPT=" "
 
 flintform="false"
 preprocess="no"
+f90_parser_fallback="true"
 
 for allargs in "$@" ; do
     arg=`echo "x$allargs" | sed -e 's/^x//' -e 's/"/\\\"/g' -e s,\',%@%\',g -e 's/%@%/\\\/g' -e 's/ /\\\ /g'`
@@ -92,6 +93,10 @@ for allargs in "$@" ; do
 	    testarg=${arg#-o}
 	    if [ "y$testarg" != "y$arg" ] ; then
 		PDB=$testarg
+	    fi
+
+	    if [ "y$arg" = "y-no-f90-parser-fallback" ]; then
+		f90_parser_fallback="false"
 	    fi
 
 	    if [ "y$arg" = "y-R" ] ; then
@@ -222,8 +227,12 @@ fi
 unset user_set_PDT_MOD_DIR
 
 if [ "$bytecount" -eq 23 ] || [ "$bytecount" -eq 0 ] || [ "$linecount" -lt 3 ]; then
-  echo "Error ${PDB}: Invoking gfparse $*"
-  ${BINDIR}/gfparse "$@"
+  if [ "$f90_parser_fallback" = true ]; then
+    echo "Error ${PDB}: Invoking gfparse $*"
+    ${BINDIR}/gfparse "$@"
+  else
+    echo "Error ${PDB}: Not invoking gfparse  since PDT F90parser was explicitly specified to TAU"
+  fi
 fi
 
 # CLEANUP
