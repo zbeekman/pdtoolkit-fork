@@ -1,5 +1,5 @@
 #!/bin/sh 
-# shellcheck disable=SC2006
+
 
 
 
@@ -36,9 +36,9 @@ mkdir -p "${PDT_MOD_DIR%/}" || echo "Could not make ${PDT_MOD_DIR} folder"
 # Creation of exclude.txt to exclude modules that haven't been compiler by gfortran 4.8
 declare -a EXCLUDELIST=() #("mpi" "iso_c_binding")
 EXCLUDEDIR="/tmp/pdt-${USER}"
-mkdir -p "${EXCLUDEDIR}"
+mkdir -p ${EXCLUDEDIR}
 EXCLUDEFILE=${EXCLUDEDIR}/exclude.txt
-rm -f "${EXCLUDEFILE}"
+rm -f ${EXCLUDEFILE}
 # commented out right now because EXCLUDELIST is empty
 # echo ${EXCLUDELIST[0]} > ${EXCLUDEFILE}
 # for ((i=1;i<"${#EXCLUDELIST[@]}";i++)); do
@@ -51,13 +51,13 @@ GFORTRAN="PATH=${BINDIR}/pdt_gfortran48:$PATH gfortran"
 
 PDTOPT=""
 if [ $# = 0 ] ; then
-  echo "Usage: `basename "$0"` [-v] [-o<file>] [files]" 1>&2
+  echo "Usage: `basename $0` [-v] [-o<file>] [files]" 1>&2
   exit 1
 fi
 
 if [ ! -f ${BINDIR}/pdt_gfortran48/gfortran ] ; then
   echo "gfparse48 invoking gfparse ..."
-  ${BINDIR}/gfparse "$@" -v
+  ${BINDIR}/gfparse $* -v
   exit
 fi
 
@@ -104,15 +104,12 @@ for allargs in "$@" ; do
 	    elif [ "y$testarg" = "y-p" ] ; then
 		preprocess="yes"
 #		SPAWNARGS="$SPAWNARGS -fwe-did-preprocessing"
-
-            # these remaining blocks are full of bashisms but the shebang specifies
-            # /bin/sh!
 	    elif [[ "$arg" = -Exclude=* ]] ; then
 		mod=${arg:9}
-		echo "${mod,,}" >> ${EXCLUDEFILE}
+		echo ${mod,,} >> ${EXCLUDEFILE}
 	    elif [[ "$arg" = -Exclude* ]] ; then
 		mod=${arg:8}
-		echo "${mod,,}" >> ${EXCLUDEFILE}
+		echo ${mod,,} >> ${EXCLUDEFILE}
 	    elif [[ (${arg:0:1} != "-") ]] ; then
 		INPUTFILE=${arg}
 	    else
@@ -124,17 +121,16 @@ done
 
 # for ppc64le we have to remove/deal with REAL128 etc.
 machine_arch=`uname -m`
-if [ "$machine_arch" = "ppc64le" ] || [ "$machine_arch" = "aarch64" ] ; then #arm64linux
+if [ "$machine_arch" = "ppc64le" -o "$machine_arch" = "aarch64" ] ; then #arm64linux
     ARCHOPT="-cpp -DREAL128=REAL64 -Dreal128=real64 -I${EXCLUDEDIR}"
-    echo mpif-sizeof.h >> "${EXCLUDEFILE}"
+    echo mpif-sizeof.h >> ${EXCLUDEFILE}
     # remove the "kind = n" where n >= 16
     EXCLUDEFILE=${EXCLUDEDIR}/exclude.txt
-    rm -f "${EXCLUDEDIR}/${INPUTFILE}"
-    sed 's/[Kk][Ii][Nn][Dd][[:space:]]*[=][[:space:]]*\(16\|32\|64\|128\)/kind=8/g' "${INPUTFILE}" >> "${EXCLUDEDIR}/${INPUTFILE}"
+    rm -f ${EXCLUDEDIR}/${INPUTFILE}
+    sed 's/[Kk][Ii][Nn][Dd][[:space:]]*[=][[:space:]]*\(16\|32\|64\|128\)/kind=8/g' ${INPUTFILE} >> ${EXCLUDEDIR}/${INPUTFILE}
     INPUTFILE=${EXCLUDEDIR}/${INPUTFILE}
 # add number of mod names being excluded to front of file
-# shellcheck disable=SC2094
-    wc -l < "${EXCLUDEFILE}" | cat - "${EXCLUDEFILE}" > "${EXCLUDEDIR}/tmp" && mv "${EXCLUDEDIR}/tmp" "${EXCLUDEFILE}"
+    wc -l < ${EXCLUDEFILE} | cat - ${EXCLUDEFILE} > ${EXCLUDEDIR}/tmp && mv ${EXCLUDEDIR}/tmp ${EXCLUDEFILE}
 fi
 
 
@@ -153,29 +149,29 @@ done
 # the name of the first source file
 #
 
-if [ "$PDB" = pdtfilenotspecified ] ; then
+if [ $PDB = pdtfilenotspecified ] ; then
   case ${INF} in
-    *.f)	PDB=`basename "${INF}" .f`.pdb
+    *.f)	PDB=`basename ${INF} .f`.pdb
 	;;
-    *.F)	PDB=`basename "${INF}" .F`.pdb
+    *.F)	PDB=`basename ${INF} .F`.pdb
 	;;
-    *.F90)	PDB=`basename "${INF}" .F90`.pdb
+    *.F90)	PDB=`basename ${INF} .F90`.pdb
 	;;
-    *.f90)	PDB=`basename "${INF}" .f90`.pdb
+    *.f90)	PDB=`basename ${INF} .f90`.pdb
 	;;
-    *.f95)	PDB=`basename "${INF}" .f95`.pdb
+    *.f95)	PDB=`basename ${INF} .f95`.pdb
 	;;
     *)	PDB=${INF}.pdb
 	;;
   esac
 fi
 
-if [ ! -r "${INF}" ]; then
+if [ ! -r ${INF} ]; then
   echo "PDT: ${INF} not readable"
   exit 1
 fi
 
-if [ "${PDB}" = ".pdb" ] ; then
+if [ ${PDB} = ".pdb" ] ; then
   echo "ERROR: Source file not specified."
   echo "PDT accepts upto three letter suffixes in file names (e.g. foo.f90)"
   exit 1
@@ -195,19 +191,21 @@ if [ $VERBOSE = on ] ; then
     echo "	gfortran ${SPAWNARGS} --> ${PDB}"
     echo "Executing ${GFORTRAN} ${GF_ARGS} ${ARCHOPT} ${INPUTFILE} ${SPAWNARGS} ${LOCOPT} ${EDGOPT}"
     rm -f $GFORTRAN_PDB_FILENAME
-    if ! eval ${GFORTRAN} ${GF_ARGS} ${ARCHOPT} ${INPUTFILE} ${SPAWNARGS} ${LOCOPT} ${EDGOPT} ; then
+    eval ${GFORTRAN} ${GF_ARGS} ${ARCHOPT} ${INPUTFILE} ${SPAWNARGS} ${LOCOPT} ${EDGOPT}
+    if [ $? != 0 ] ; then 
         ERROR=true
     fi
-    mv "$GFORTRAN_PDB_FILENAME" "${PDB}"
+    mv $GFORTRAN_PDB_FILENAME ${PDB}
 else
     # disable printing of stdout/stderr unless there is an error
     rm -f $GFORTRAN_PDB_FILENAME
-    if ! eval ${GFORTRAN} ${GF_ARGS} ${ARCHOPT} ${INPUTFILE} ${SPAWNARGS} ${LOCOPT} ${EDGOPT} 1> /dev/null 2>&1 ; then
+    eval ${GFORTRAN} ${GF_ARGS} ${ARCHOPT} ${INPUTFILE} ${SPAWNARGS} ${LOCOPT} ${EDGOPT} 1> /dev/null 2>&1
+    if [ $? != 0 ] ; then
         ERROR=true
         rm -f $GFORTRAN_PDB_FILENAME
         eval ${GFORTRAN} ${GF_ARGS} ${ARCHOPT} ${INPUTFILE} ${SPAWNARGS} ${LOCOPT} ${EDGOPT}
     fi
-	  mv "$GFORTRAN_PDB_FILENAME" "${PDB}"
+	  mv $GFORTRAN_PDB_FILENAME ${PDB}
 fi
 
 # If gfparse can't produce a valid PDB file, invoke gfparse. This happens when
@@ -238,7 +236,7 @@ if [ "$bytecount" -eq 23 ] || [ "$bytecount" -eq 0 ] || [ "$linecount" -lt 3 ]; 
 fi
 
 # CLEANUP
-rm -f "${EXCLUDEDIR}/${INPUTFILE}"
-rm -f "${EXCLUDEFILE}"
+rm -f ${EXCLUDEDIR}/${INPUTFILE}
+rm -f ${EXCLUDEFILE}
 
 # EOF
